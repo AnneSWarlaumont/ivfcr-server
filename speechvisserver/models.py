@@ -1,0 +1,220 @@
+from django.db import models
+from xml.etree import ElementTree
+import numpy
+from scipy.io import wavfile
+from python_speech_features import logfbank, mfcc
+import os.path
+
+
+class Child(models.Model):
+    id = models.CharField(max_length=50, primary_key=True, null=False)
+    dob = models.DateField(null=False)
+    gender = models.CharField(max_length=1, blank=False, null=False)
+
+    def __str__(self):
+        return '{0} {1} {2}'.format(self.id, self.dob, self.gender)
+
+
+class Recording(models.Model):
+    @staticmethod
+    def import_recording(id, directory):
+        """Create a new recording in the database, parse the associated ITS files, create
+            rows for each segment, and split the original wave file into segments in subdirectories"""
+        recording = Recording(id=id, directory=directory)
+        recording.read_child_from_its()
+        recording.save()
+        recording.read_audio()
+        numbers, starts, ends, speakers, categories = recording.split_its()
+        recording.create_segments(numbers, starts, ends, speakers)
+        recording.create_annotations(numbers, speakers, categories, 'LENA', 'SPLIT_ITS')
+
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, null=False)
+    id = models.CharField(max_length=50, primary_key=True)
+    directory = models.CharField(max_length=200, null=True)
+
+    def read_child_from_its(self):
+        tree = ElementTree.parse('{0}/{1}.its'.format(self.directory, self.id))
+        root = tree.getroot()
+        childElement = next(root.iter('Child'))
+        child = Child.objects.filter(id=childElement.get('id'))
+        if child.exists():
+            child = child.get()
+        else:
+            child = Child(id=childElement.get('id'), dob=childElement.get('DOB'),
+                          gender=childElement.get('Gender'))
+            child.save()
+        self.child = child
+
+    def split_its(self):
+        tree = ElementTree.parse('{0}/{1}.its'.format(self.directory, self.id))
+        root = tree.getroot()
+        starts = []
+        ends = []
+        speakers = []
+        categories = []
+        for segment in root.iter('Segment'):
+            starts.append(parse_time(segment.attrib['startTime']))
+            ends.append(parse_time(segment.attrib['endTime']))
+            speakers.append(segment.attrib['spkr'])
+            categories.append(parse_category(segment))
+        return range(len(starts)), starts, ends, speakers, categories
+
+    def read_audio(self):
+        filename = '{0}/{1}.wav'.format(self.directory, self.id)
+        self.samplerate, self.signal = wavfile.read(filename)
+
+    def create_segments(self, numbers, starts, ends, speakers):
+        segments_directory = os.path.join(self.directory, self.id)
+        if not os.path.exists(segments_directory):
+            os.makedirs(segments_directory)
+        for speaker in set(speakers):
+            speaker_directory = os.path.join(segments_directory, speaker)
+            if not os.path.exists(speaker_directory):
+                os.makedirs(speaker_directory)
+        segments = []
+        for number, start, end, speaker in zip(numbers, starts, ends, speakers):
+            print('Inserting Segment {0} of {1}'.format(number, len(numbers)))
+            segment_audio = self.signal[int(start * self.samplerate):int(end * self.samplerate)]
+            filename = os.path.join(segments_directory, speaker, '{0}.wav'.format(number))
+            wavfile.write(filename, self.samplerate, segment_audio)
+            segment = Segment(recording=self, number=number, start=start, end=end, filename=filename)
+            segments.append(segment)
+        Segment.objects.bulk_create(segments)
+
+    def create_annotations(self, numbers, speakers, categories, coder, method):
+        annotations = []
+        segments = Segment.objects.filter(recording=self).order_by('number')
+        for segment, speaker, category in zip(segments, speakers, categories):
+            print('Inserting Annotation {0} of {1}'.format(segment.number, len(segments)))
+            annotation = Annotation(segment=segment, speaker=speaker, category=category,
+                                    coder=coder, method=method)
+            annotations.append(annotation)
+        Annotation.objects.bulk_create(annotations)
+
+    def frequency_banks(self, blockSize=600):
+        samplerate, signal = self.read_recording()
+        fbanks = numpy.zeros((0, 1, 26))
+        start = 0
+        while start < len(signal):
+            end = start + blockSize * samplerate
+            end = end if end < len(signal) else len(signal)
+            block = signal[start:end]
+            fbank = logfbank(block, self.samplerate, winlen=0.05, winstep=0.025)
+            fbanks = numpy.concatenate((fbanks, numpy.reshape(fbank, (len(fbank), 1, 26))))
+            start = end
+        return fbanks
+
+    def __str__(self):
+        return '{0} {1}'.format(self.directory, self.id)
+
+
+def parse_time(formatted, default=0.0):
+    if formatted.startswith('PT') and formatted.endswith('S'):
+        return float(formatted[2:-1])
+    elif formatted.startswith('P') and formatted.endswith('S'):
+        return float(formatted[1:-1])
+    else:
+        return default
+
+
+def parse_category(segment):
+    category = 'OTHER'
+    if 'childUttLen' in segment.attrib and parse_time(segment.attrib['childUttLen']) > 0:
+        category = 'CHILD_SPEECH'
+    elif parse_time(segment.attrib.get('childCryVfxLen', '')) > 0:
+        category = 'CHILD_CRY'
+    elif (parse_time(segment.attrib.get('femaleAdultUttLen', '')) > 0
+          or parse_time(segment.attrib.get('maleAdultUttLen', '')) > 0):
+        category = 'ADULT_SPEECH'
+    elif (parse_time(segment.attrib.get('femaleAdultNonSpeechLen', '')) > 0
+          or parse_time(segment.attrib.get('maleAdultNonSpeechLen', '')) > 0):
+        category = 'ADULT_NONSPEECH'
+    return category
+
+
+class Segment(models.Model):
+    recording = models.ForeignKey(Recording, on_delete=models.CASCADE, null=False)
+    number = models.IntegerField(null=False)
+    start = models.DecimalField(max_digits=10, decimal_places=4)
+    end = models.DecimalField(max_digits=10, decimal_places=4)
+    filename = models.CharField(max_length=400, blank=True)
+
+    class Meta:
+        unique_together = ('recording', 'number')
+
+    def read_audio(self):
+        self.samplerate, self.signal = wavfile.read(self.filename)
+
+    def power(self, window_size, step_size):
+        """Return a time series corresponding to the acoustic power of the segment waveform within
+        each window of the given size, offset by the specified step."""
+        steps = numpy.arange(window_size, self.signal.size, step_size)
+        power = numpy.zeros(len(steps))
+        for i, step in zip(range(len(steps)), steps):
+            windowed_signal = self.signal[step - window_size:step].astype(int)
+            rms = numpy.sqrt(numpy.mean(numpy.square(windowed_signal)))
+            power[i] = 10 * numpy.log10(rms)
+        return steps / float(self.sample_rate), power
+
+    def power_spectrum(self, window_size, step_size):
+        """Return a time series of power spectra, where each spectrum corresponds to the acoustic power within a window
+        of the given size and offset from the previous window by the given step. The spectra represent the power over
+        frequency within the window, where the associated frequencies are specified by the first return value."""
+        frequencies = numpy.fft.rfftfreq(window_size, d=1. / self.sample_rate)
+        spectrum = numpy.ndarray((0, frequencies.size))
+        window = numpy.hanning(window_size)
+        for i in range(window_size, self.signal.size, step_size):
+            x = window * self.signal[i - window_size:i]
+            spectrum = numpy.vstack((spectrum, abs(numpy.fft.rfft(x).real)))
+        return frequencies, spectrum
+
+    def formants(self, window_size, step_size, count):
+        """Return a time series of formant frequencies identified from the power spectra. Count is the number of
+        formants to identify."""
+        frequencies, spectrum = self.power_spectrum(window_size, step_size)
+        formants = numpy.full((spectrum.shape[0], count), float('NaN'))
+        for step in range(spectrum.shape[0]):
+            # mean_spectrum = numpy.mean(spectrum, axis=0)
+            mean_spectrum = spectrum[step]
+            peaks = []
+            for x, y in zip(range(len(mean_spectrum)), mean_spectrum):
+                if y == max(mean_spectrum[max(0, x - 10):min(len(mean_spectrum), x + 10)]):
+                    peaks.append((x, y))
+            peaks = numpy.array(peaks)
+            peaks = peaks[numpy.argsort(peaks[:, 1]), :]
+            f = numpy.sort(frequencies[peaks[-count:, 0].astype(int)])
+            f = numpy.pad(f, (0, count - f.size), 'constant', constant_values=float('NaN'))
+            formants[step, :] = f
+        return formants
+
+    def frequencybank(self, window_size=0.05, step_size=0.05, truncate=0.6):
+        """Returns a Mel-frequency filter bank for this segment."""
+        x = self.signal
+        if truncate:
+            x = x[:int(truncate * self.sample_rate)]
+        return logfbank(x, self.sample_rate, winlen=window_size, winstep=step_size)
+
+    def mfccs(self):
+        """Returns the Mel-Frequency Cepstral Coefficients for this segment."""
+        return mfcc(self.signal[:int(0.6 * self.sample_rate)], self.sample_rate, winlen=0.05,
+                    winstep=0.05, numcep=40, nfilt=80)
+
+    def __str__(self):
+        return '{0}: {1}\t{2}s - {3}s\t{4}'.format(self.id, self.recording.id,
+            self.start, self.end, self.filename)
+
+
+class Annotation(models.Model):
+    segment = models.ForeignKey(Segment, on_delete=models.CASCADE, related_name='segment')
+    speaker = models.CharField(max_length=50)
+    category = models.CharField(max_length=50, blank=True, null=True)
+    transcription = models.CharField(max_length=400, blank=True, null=True)
+    sensitive = models.BooleanField(default=True)
+    coder = models.CharField(max_length=50)
+    method = models.CharField(max_length=50, blank=True, null=True)
+    annotated = models.DateTimeField(auto_now=True, null=True)
+
+    def __str__(self):
+        return '{0}: {1}\t{2}\t{3}\t{4}\t{5}\t({6}, {7}, {8})'.format(self.id, self.segment.id,
+            self.speaker, self.number, self.category, self.transcription,
+            self.coder, self.method, self.annotated)

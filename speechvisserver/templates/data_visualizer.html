@@ -1,0 +1,35 @@
+<html style="width: 100%">
+	<head>
+		<script type="text/javascript">
+function getPlot() {
+	var plot_container = document.getElementById("plot_container");
+	var plot_type = document.getElementById("plot_type_option").value;
+	var recording_id = document.getElementById("recording_id_option").value;
+	plot_container.src = "plot?plot_type=" + plot_type + "&recording_id=" + recording_id;
+}
+		</script>
+	</head>
+	<body style="width: 100%">
+		{% load static %}
+		<div id="content" style="border: solid 2px darkgray; width: 640px; margin: 0 auto; padding: 8px;">
+			<h2>IVFCR Data Visualizer</h2>
+			<select id="plot_type_option">
+				{% for type in plot_types %}
+				<option>{{ type }}</option>
+				{% endfor %}
+			</select>
+			<select id="recording_id_option">
+				{% for row in ids %}
+				<option>{{ row.id }}</option>
+				{% endfor %}
+			</select>
+			<select id="speaker_option">
+				{% for speaker in speakers %}
+				<option>{{ speaker }}</option>
+				{% endfor %}
+			</select>
+			<button onclick="getPlot()">REFRESH</button>
+			<img id="plot_container" src="plot" />
+		</div>
+	</body>
+</html>

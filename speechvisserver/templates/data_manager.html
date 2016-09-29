@@ -1,0 +1,62 @@
+<html style="width: 100%">
+	<head>
+        <title>Data Manager</title>
+        <style>
+th {
+    border: 1px solid grey;
+}
+td {
+    border: 1px solid grey;
+    padding: 2px;
+}
+        </style>
+	</head>
+	<body style="width: 100%">
+		{% load static %}
+		<div id="content" style="border: solid 2px darkgray; width: 640px; margin: 0 auto; padding: 8px;">
+			<h2>IVFCR Data Manager</h2>
+            <form>
+                <table style="border: solid 1px grey;">
+                    <tr>
+                        <th>Child Id</th>
+                        <th>Recording Id</th>
+                        <th>Directory</th>
+                        <th></th>
+                    </tr>
+                    {% for recording in recordings %}
+                    <tr>
+                        <td>{{ recording.child_id }}</td>
+                        <td>{{ recording.id }}</td>
+                        <td>{{ recording.directory }}</td>
+                        <td><button name="export" type="submit" value="{{ recording.id }}" />Export</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                <div>
+                    <h4 style="margin: 0;">Export Options</h4>
+                    <label>Format</label>
+                    <select id="format_type_option" name="export_format">
+                        {% for type in export_formats %}
+                        <option>{{ type }}</option>
+                        {% endfor %}
+                    </select>
+                    {% for column in export_columns %}
+                    <label for="export_{{ column }}">{{ column }}</label>
+                    <input name="export_{{ column }}" id="export_{{ column }}" type="checkbox" />
+                    {% endfor %}
+                </div>
+                <div>
+                    <h4 style="margin-bottom: 0;">Import Recording</h4>
+                    <label>Recording Id</label>
+                    <input name="add_recording_id" type="text" />
+                    <br />
+                    <label>Directory</label>
+                    <input name="add_recording_directory" type="text" />
+                    <br />
+                    <input name="import" type="submit" value="import" />
+                    <p style="color: red; font-weight: bold;">{{ error }}</p>
+                </div>
+            </form>
+		</div>
+	</body>
+</html>

@@ -1,0 +1,64 @@
+<html style="width: 100%">
+	<head>
+		<title>Speaker Validation</title>
+	</head>
+	<body style="width: 100%">
+		{% load static %}
+		<div id="content" style="border: solid 2px darkgray; width: 320px; margin: 0 auto; padding: 8px;">
+			<form>
+				<h4>Infant Vocalization Speaker Validation</h4>
+				<p><span style="font-style: italic; color: black;"
+					title="The speaker validation task is intended to flag segments of LENA recordings with incorrect speaker labels.
+- Enter your name in the Coder field below.
+- Listen to the sound by clicking the play button.
+- If you hear only the indicated speaker, select Only.
+- If you hear the indicated speaker and any other sounds or voices, select Overlap.
+- If you don't hear the indicated speaker, select Not Heard.
+- If there is any sensitive material in the segment, check the box.
+- When you are ready, click the submit button to move onto the next sound.">
+					Instructions</span></p>
+				<label for="coder_field">Name:</label>
+				<input id="coder_field" name="coder" type="text" value="{{ coder }}" />
+				<audio controls style="padding: 1em 4px;">
+					<source src="{% static segment_file %}" type="audio/wav" />
+				</audio>
+				<input name="recording_id" type="hidden" value="{{ recording_id }}" />
+				<input name="segment_number" type="hidden" value="{{ segment_number }}" />
+				<input name="annotation_id" type="hidden" value="{{ annotation_id }}" />
+				<br />
+				<label>Does this segment contain <strong>{{ speaker_descriptive }}</strong> vocalization?</label>
+				<div style="margin: 4px;">
+					<div style="margin: 8px 4px;">
+						<input id="speaker_valid" name="speaker" type="radio" value="{{ speaker }}" checked="true" />
+						<label for="speaker_valid" style="border: 1px green solid; color: green; background-color: lightgreen; padding: 2px;">{{ speaker_descriptive }} Only</label><br />
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="speaker_overlap" name="speaker" type="radio" value="OLN" />
+						<label for="speaker_overlap" style="border: 1px red solid; color: red; background-color: yellow; padding: 2px;">{{ speaker_descriptive }} Overlap</label>
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="speaker_reject" name="speaker" type="radio" value="REJ" />
+						<label for="speaker_reject" style="border: 1px red solid; color: red; background-color: pink; padding: 2px;">{{ speaker_descriptive }} Not Heard</label>
+					</div>
+				</div>
+				<label for="sensitive">Does this segment contain
+					<span style="font-style: italic; color: blue;"
+						title="Some examples of what should be marked are listed below. This is not a complete list, so in questionable cases ask your supervisor for help. Please be conservative: 'When in doubt, hold it out.'
+- Last/family names (first names, including uncommon ones, are okay)
+- Addresses or other contact information
+- Birthdates
+- Social security, credit card, etc.. numbers
+- Serious arguments
+- Sexual activity or sounds of adults pooping
+- Discussion of drug use
+- Complaints about friends, family members, coworkers, etc.
+- Medical information of a sensitive nature">
+					sensitive material?</span></label>
+				<input name="sensitive" type="checkbox" value="true" />
+				<br />
+				<input type="submit" name="submit" value="Submit" style="margin: 1em 130px;" />
+				<label style="font-color: red;">{{ error }}</label>
+			</form>
+		</div>
+	</body>
+</html>
