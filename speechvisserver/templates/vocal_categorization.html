@@ -1,0 +1,54 @@
+<html style="width: 100%">
+	<head>
+		<title>Vocal Categorization</title>
+	</head>
+	<body style="width: 100%">
+		{% load static %}
+		<div id="content" style="border: solid 2px darkgray; width: 320px; margin: 0 auto; padding: 8px;">
+			<a href="{% url 'index' %}">Home</a>
+			<form>
+				<h4>Infant Vocal Categorization</h4>
+				<p><span style="font-style: italic; color: black;"
+					title="Add instructions here...
+- Enter your name in the Coder field below.
+- Listen to the sound by clicking the play button.
+- AND HERE...
+- When you are ready, click the submit button to move onto the next sound.">
+					Instructions</span></p>
+				<label for="coder_field">Name:</label>
+				<input id="coder_field" name="coder" type="text" value="{{ coder }}" />
+				<audio controls style="padding: 1em 4px;">
+					<source src="{% static filename %}" type="audio/wav" />
+				</audio>
+				<input name="segment_id" type="hidden" value="{{ segment.id }}" />
+				<br />
+				<label>What category best describes this vocalization?</label>
+				<div style="margin: 4px;">
+					<div style="margin: 8px 4px;">
+						<input id="category_speech" name="category" type="radio" value="SPEECH" />
+						<label for="category_speech" style="border: 1px solid; color: black; background-color: lightgrey; padding: 2px;">Speech</label><br />
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="category_canonical" name="category" type="radio" value="CANONICAL" />
+						<label for="category_canonical" style="border: 1px solid; color: black; background-color: lightgrey; padding: 2px;">Canonical Babbling</label><br />
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="category_noncanonical" name="category" type="radio" value="NON-CANONICAL" />
+						<label for="category_noncanonical" style="border: 1px solid; color: black; background-color: lightgrey; padding: 2px;">Non-Canonical Utterance</label>
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="category_reflexive" name="category" type="radio" value="REFLEXIVE" />
+						<label for="category_reflexive" style="border: 1px solid; color: black; background-color: lightgrey; padding: 2px;">Reflexive Sound</label>
+					</div>
+					<div style="margin: 8px 4px;">
+						<input id="category_other" name="category" type="radio" value="OTHER" />
+						<label for="category_other" style="border: 1px solid; color: black; background-color: lightgrey; padding: 2px;">Other/Non-Vocal</label>
+					</div>
+				</div>
+				<br />
+				<input type="submit" name="submit" value="Submit" style="margin: 1em 130px;" />
+				<label style="font-color: red;">{{ error }}</label>
+			</form>
+		</div>
+	</body>
+</html>

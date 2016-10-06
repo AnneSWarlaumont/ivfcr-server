@@ -5,13 +5,15 @@ function getPlot() {
 	var plot_container = document.getElementById("plot_container");
 	var plot_type = document.getElementById("plot_type_option").value;
 	var recording_id = document.getElementById("recording_id_option").value;
-	plot_container.src = "plot?plot_type=" + plot_type + "&recording_id=" + recording_id;
+	var speaker = document.getElementById("speaker_option").value;
+	plot_container.src = "plot?plot_type=" + plot_type + "&recording_id=" + recording_id + "&speaker=" + speaker;
 }
 		</script>
 	</head>
 	<body style="width: 100%">
 		{% load static %}
 		<div id="content" style="border: solid 2px darkgray; width: 640px; margin: 0 auto; padding: 8px;">
+			<a href="{% url 'index' %}">Home</a>
 			<h2>IVFCR Data Visualizer</h2>
 			<select id="plot_type_option">
 				{% for type in plot_types %}
