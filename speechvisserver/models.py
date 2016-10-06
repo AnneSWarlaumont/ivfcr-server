@@ -1,7 +1,9 @@
 from django.db import models
+from django.db.models import Max
 from xml.etree import ElementTree
 import numpy
 from scipy.io import wavfile
+from scipy.signal import butter, lfilter, correlate
 from python_speech_features import logfbank, mfcc
 import os.path
 
@@ -104,6 +106,11 @@ class Recording(models.Model):
             start = end
         return fbanks
 
+    @property
+    def lena_segments(self):
+        return self.segments.filter(annotation__coder='LENA').annotate(
+            speaker=Max('annotation__speaker'), category=Max('annotation__category'))
+
     def __str__(self):
         return '{0} {1}'.format(self.directory, self.id)
 
@@ -133,34 +140,75 @@ def parse_category(segment):
 
 
 class Segment(models.Model):
-    recording = models.ForeignKey(Recording, on_delete=models.CASCADE, null=False)
-    number = models.IntegerField(null=False)
-    start = models.DecimalField(max_digits=10, decimal_places=4)
-    end = models.DecimalField(max_digits=10, decimal_places=4)
+    recording = models.ForeignKey(Recording, on_delete=models.CASCADE, related_name='segment')
+    number = models.IntegerField()
+    start = models.FloatField()
+    end = models.FloatField()
     filename = models.CharField(max_length=400, blank=True)
 
     class Meta:
         unique_together = ('recording', 'number')
 
+    @property
+    def duration(self):
+        return self.end - self.start
+
+    @property
+    def lena_speaker(self):
+        return self.annotations.get(coder='LENA').speaker
+
+    @property
+    def lena_category(self):
+        return self.annotations.get(coder='LENA').category
+
     def read_audio(self):
         self.samplerate, self.signal = wavfile.read(self.filename)
+
+    def acoustic_features(self):
+        window_size = 1024
+        step_size = 512
+        _, power = self.power(window_size, step_size)
+        pitch = self.pitch(window_size, step_size)
+        return {
+            'peak_amplitude': power.max(),
+            'mean_amplitude': power.mean(),
+            'pitch': pitch
+        }
 
     def power(self, window_size, step_size):
         """Return a time series corresponding to the acoustic power of the segment waveform within
         each window of the given size, offset by the specified step."""
-        steps = numpy.arange(window_size, self.signal.size, step_size)
+        steps = numpy.arange(0, self.signal.size - window_size + 1, step_size)
         power = numpy.zeros(len(steps))
         for i, step in zip(range(len(steps)), steps):
-            windowed_signal = self.signal[step - window_size:step].astype(int)
+            windowed_signal = self.signal[step:step + window_size].astype(int)
             rms = numpy.sqrt(numpy.mean(numpy.square(windowed_signal)))
             power[i] = 10 * numpy.log10(rms)
-        return steps / float(self.sample_rate), power
+        return steps / float(self.samplerate), power
+
+    def pitch(self, window_size, step_size):
+        nyquist = 0.5 * self.samplerate
+        low = 50 / nyquist
+        high = 600 / nyquist
+        order = 5
+        b, a = butter(order, [low, high], btype='band')
+        steps = numpy.arange(0, self.signal.size - window_size + 1, step_size)
+        pitch = numpy.zeros(len(steps))
+        for i, step in zip(range(len(steps)), steps):
+            windowed_signal = self.signal[step:step + window_size].astype(int)
+            filtered_signal = lfilter(b, a, windowed_signal)
+            spectrum = abs(numpy.fft.rfft(filtered_signal).real)
+            cepstrum = abs(numpy.fft.rfft(spectrum).real)
+            for j in range(5, len(cepstrum) - 5):
+                if cepstrum[j] >= cepstrum[j - 5:j + 5].max():
+                    pitch[i] = j
+        return self.samplerate / pitch.mean()
 
     def power_spectrum(self, window_size, step_size):
         """Return a time series of power spectra, where each spectrum corresponds to the acoustic power within a window
         of the given size and offset from the previous window by the given step. The spectra represent the power over
         frequency within the window, where the associated frequencies are specified by the first return value."""
-        frequencies = numpy.fft.rfftfreq(window_size, d=1. / self.sample_rate)
+        frequencies = numpy.fft.rfftfreq(window_size, d=1. / self.samplerate)
         spectrum = numpy.ndarray((0, frequencies.size))
         window = numpy.hanning(window_size)
         for i in range(window_size, self.signal.size, step_size):
@@ -173,12 +221,13 @@ class Segment(models.Model):
         formants to identify."""
         frequencies, spectrum = self.power_spectrum(window_size, step_size)
         formants = numpy.full((spectrum.shape[0], count), float('NaN'))
+        peakwidth = int(50 * (frequencies[-1] / len(frequencies)))
         for step in range(spectrum.shape[0]):
             # mean_spectrum = numpy.mean(spectrum, axis=0)
             mean_spectrum = spectrum[step]
             peaks = []
             for x, y in zip(range(len(mean_spectrum)), mean_spectrum):
-                if y == max(mean_spectrum[max(0, x - 10):min(len(mean_spectrum), x + 10)]):
+                if y == max(mean_spectrum[max(0, x - peakwidth):min(len(mean_spectrum), x + peakwidth)]):
                     peaks.append((x, y))
             peaks = numpy.array(peaks)
             peaks = peaks[numpy.argsort(peaks[:, 1]), :]
@@ -196,7 +245,7 @@ class Segment(models.Model):
 
     def mfccs(self):
         """Returns the Mel-Frequency Cepstral Coefficients for this segment."""
-        return mfcc(self.signal[:int(0.6 * self.sample_rate)], self.sample_rate, winlen=0.05,
+        return mfcc(self.signal[:int(0.6 * self.samplerate)], self.samplerate, winlen=0.05,
                     winstep=0.05, numcep=40, nfilt=80)
 
     def __str__(self):
@@ -205,7 +254,7 @@ class Segment(models.Model):
 
 
 class Annotation(models.Model):
-    segment = models.ForeignKey(Segment, on_delete=models.CASCADE, related_name='segment')
+    segment = models.ForeignKey(Segment, on_delete=models.CASCADE, related_name='annotation')
     speaker = models.CharField(max_length=50)
     category = models.CharField(max_length=50, blank=True, null=True)
     transcription = models.CharField(max_length=400, blank=True, null=True)
@@ -216,5 +265,5 @@ class Annotation(models.Model):
 
     def __str__(self):
         return '{0}: {1}\t{2}\t{3}\t{4}\t{5}\t({6}, {7}, {8})'.format(self.id, self.segment.id,
-            self.speaker, self.number, self.category, self.transcription,
+            self.speaker, self.category, self.transcription, self.sensitive,
             self.coder, self.method, self.annotated)

@@ -5,9 +5,10 @@ import numpy
 
 def plot_segment(segment, window_size, step_size):
     """Plots the waveform, power over time, spectrogram with formants, and power over frequency of a Segment."""
-    pyplot.figure()
+    fig = pyplot.figure()
     pyplot.subplot(2, 2, 1)
-    pyplot.plot(numpy.linspace(0, segment.duration, segment.samples), segment.signal)
+    segment.read_audio()
+    pyplot.plot(numpy.linspace(0, float(segment.duration), len(segment.signal)), segment.signal)
     pyplot.xlim(0, segment.duration)
     pyplot.xlabel('Time (s)')
     pyplot.ylabel('Sound Pressure')
@@ -18,8 +19,8 @@ def plot_segment(segment, window_size, step_size):
     pyplot.xlabel('Time (s)')
     pyplot.ylabel('Power (dB)')
     pyplot.subplot(2, 2, 3)
-    pyplot.specgram(segment.signal, NFFT=window_size, Fs=segment.sample_rate, noverlap=step_size)
-    formants = segment.formants(window_size, step_size, 2)
+    pyplot.specgram(segment.signal, NFFT=window_size, Fs=segment.samplerate, noverlap=window_size - step_size)
+    formants = segment.formants(window_size, step_size, 4)
     pyplot.plot(numpy.linspace(0, segment.duration, len(formants)), formants, 'o')
     pyplot.xlim(0, segment.duration)
     pyplot.xlabel('Time (s)')
@@ -29,4 +30,5 @@ def plot_segment(segment, window_size, step_size):
     pyplot.plot(frequencies / 1000, 10 * numpy.log10(numpy.mean(spectrum, axis=0)))
     pyplot.xlabel('Frequency (kHz)')
     pyplot.ylabel('Power (dB)')
+    return fig
 

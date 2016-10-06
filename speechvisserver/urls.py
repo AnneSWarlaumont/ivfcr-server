@@ -22,6 +22,7 @@ from . import views
 urlpatterns = [
     url(r'^$', views.index, name='index'),
     url(r'^speaker_validation/', views.speaker_validation, name='speaker_validation'),
+    url(r'^vocal_categorization/', views.vocal_categorization, name='vocal_categorization'),
     url(r'^data_manager', views.data_manager, name='data_manager'),
     url(r'^data_visualizer', views.data_visualizer, name='data_visualizer'),
     url(r'^plot', views.plot, name='plot'),

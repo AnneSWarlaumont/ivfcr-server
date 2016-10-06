@@ -1,10 +1,12 @@
 from django.http import HttpResponse
 from django.shortcuts import render
-from django.template import loader
-from django.forms.models import model_to_dict
-from speechvisserver.models import *
+from speechvisserver.ivfcrvis.recording import *
 import random
 import csv
+import decimal
+import scipy.io
+from io import BytesIO
+import seaborn
 
 
 def index(request):
@@ -19,30 +21,51 @@ def speaker_validation(request):
         if not coder:
             error = 'Your name is required in the coder field.'
         else:
-            annotation_id = request.GET.get("annotation_id")
+            annotation_id = request.GET.get('annotation_id')
             annotation = Annotation.objects.get(id=annotation_id)
             segment = annotation.segment
             sensitive = request.GET.get('sensitive', 'false')
             validation = Annotation(segment=segment, sensitive=sensitive,
                 coder=coder, method='SPEAKER_VALIDATION')
-            validation.speaker = request.GET.get("speaker")
+            validation.speaker = request.GET.get('speaker')
             validation.save()
-    recording = Recording.objects.all()[random.randrange(Recording.objects.count())]
-    numbers = [s['number'] for s in
-        Segment.objects.filter(recording=recording, segment__speaker='CHN').values('number')]
-    segment_number = numbers[random.randrange(len(numbers))]
-    annotation = Annotation.objects.filter(segment__recording=recording, segment__number=segment_number, coder="LENA").get()
+    records = Annotation.objects.filter(coder='LENA', speaker='CHN').exclude(segment__annotation__coder=coder)
+    annotation = records[random.randrange(records.count())]
     context = {
         'coder': coder,
-        'recording_id': recording.id,
-        'segment_number': segment_number,
-        'segment_file': '{0}/CHN/{1}.wav'.format(recording.id, segment_number),
+        'recording_id': annotation.segment.recording.id,
+        'segment_number': annotation.segment.number,
+        'segment_file': segment.filename,
         'speaker': annotation.speaker,
         'speaker_descriptive': getDescriptiveName(annotation.speaker),
         'annotation_id': annotation.id,
         'error': error
     }
     return render(request, 'speaker_validation.html', context)
+
+
+def vocal_categorization(request):
+    coder = request.GET.get('coder', '')
+    submit = request.GET.get('submit', '')
+    error = ''
+    if submit:
+        if not coder:
+            error = 'Your name is required in the coder field.'
+        else:
+            segment_id = request.GET.get('segment_id')
+            segment = Segment.objects.get(id=segment_id)
+            annotation = Annotation(segment=segment, coder=coder, method='VOCAL_CATEGORIZATION')
+            annotation.category = request.GET.get('category')
+            annotation.save()
+    records = Segment.objects.filter(annotation__speaker='CHN').exclude(annotation__method='VOCAL_CATEGORIZATION')
+    segment = records[random.randrange(records.count())]
+    context = {
+        'coder': coder,
+        'segment': segment,
+        'filename': segment.filename,
+        'error': error
+    }
+    return render(request, 'vocal_categorization.html', context)
 
 
 def data_manager(request):
@@ -57,27 +80,93 @@ def data_manager(request):
             recording = Recording(id=id, directory=directory)
             recording.save()
     export_columns = ['number', 'speaker', 'start', 'end']
+    acoustic_columns = ['peak_amplitude', 'mean_amplitude', 'pitch']
     export_id = request.GET.get('export', '')
     if Recording.objects.filter(id=export_id).exists():
         selected_columns = []
         for column in export_columns:
             if request.GET.get('export_{}'.format(column), False):
                 selected_columns.append(column)
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="export.csv"'
-        writer = csv.DictWriter(response, selected_columns, extrasaction='ignore')
-        writer.writeheader()
-        for segment in Segment.objects.filter(recording__id=export_id):
-            writer.writerow(model_to_dict(segment))
-        return response
-    else:
-        context = {
-            'export_formats': ['CSV', 'NPY', 'MAT'],
-            'export_columns': export_columns,
-            'recordings': Recording.objects.all(),
-            'error': error
-        }
-        return render(request, 'data_manager.html', context)
+        segments = Segment.objects.filter(recording__id=export_id, annotation__coder='LENA').annotate(speaker=Max('annotation__speaker'))
+        export_speakers = request.GET.getlist('export_speakers')
+        if len(export_speakers) > 0:
+            print('speakers: {}'.format(export_speakers))
+            segments = segments.filter(speaker__in=export_speakers)
+        data = segments.values_list(*selected_columns)
+        export_format = request.GET.get('export_format', 'CSV')
+        if export_format == 'CSV':
+            return export_csv(data, selected_columns)
+        else:
+            arrays = values_to_numpy_arrays(data, selected_columns)
+            selected_acoustic_columns = []
+            for column in acoustic_columns:
+                selected_acoustic_columns.append(request.GET.get('export_{}'.format(column), False))
+                if selected_acoustic_columns[-1]:
+                    arrays[column] = []
+            for segment in segments:
+                segment.read_audio()
+                print('Getting acoustic features for segment {}'.format(segment.number))
+                acoustic_features = segment.acoustic_features()
+                for column, export in zip(acoustic_columns, selected_acoustic_columns):
+                    if export:
+                        arrays[column].append(acoustic_features[column])
+            if export_format == 'NPZ':
+                return export_npz(arrays)
+            elif export_format == 'MAT':
+                return export_mat(arrays)
+            else:
+                error = 'Invalid Export Format!'
+    context = {
+        'export_speakers': ['CHN', 'CXN', 'FAN', 'MAN'],
+        'export_formats': ['CSV', 'NPZ', 'MAT'],
+        'export_columns': export_columns,
+        'acoustic_columns': acoustic_columns,
+        'recordings': Recording.objects.all(),
+        'error': error
+    }
+    return render(request, 'data_manager.html', context)
+
+
+def export_csv(data, columns):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="export.csv"'
+    writer = csv.writer(response)
+    writer.writerow(columns)
+    for row in data:
+        writer.writerow(row)
+    return response
+
+
+def values_to_numpy_arrays(data, columns):
+    arrays = {}
+    for column, index in zip(columns, range(len(columns))):
+        dtype = type(data[0][index])
+        if dtype == decimal.Decimal:
+            dtype = float
+        arrays[column] = numpy.array([value[index] for value in data], dtype=dtype)
+    return arrays
+
+
+def export_npz(arrays):
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="export.npz"'
+    buffer = BytesIO()
+    numpy.savez(buffer, **arrays)
+    npzFile = buffer.getvalue()
+    buffer.close()
+    response.write(npzFile)
+    return response
+
+
+def export_mat(arrays):
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="export.mat"'
+    buffer = BytesIO()
+    scipy.io.savemat(buffer, arrays)
+    matFile = buffer.getvalue()
+    buffer.close()
+    response.write(matFile)
+    return response
 
 
 def data_visualizer(request):
@@ -96,21 +185,19 @@ def plot(request):
     type = request.GET.get('plot_type', types[0])
     speakers = ['CHN', 'FAN', 'MAN', 'CXN']
     speaker = request.GET.get('speaker', speakers[0])
-    import speechvis
-    id = request.GET.get('recording_id', speechvis.ids[0])
-    recording = speechvis.Recording('D:/ivfcr', id)
+    id = request.GET.get('recording_id', Recording.objects.all()[0].id)
+    recording = Recording.objects.get(id=id)
     if type == types[0]:
-        fig = speechvis.plot_speaker_counts(recording)
+        fig = plot_speaker_counts(recording)
     elif type == types[1]:
-        fig = speechvis.plot_durations(recording)
+        fig = plot_durations(recording, speaker)
     elif type == types[2]:
-        fig = speechvis.plot_intervals(recording, speaker)
+        fig = plot_intervals(recording, speaker)
     elif type == types[3]:
-        fig = speechvis.plot_volubility(recording, speaker)
+        fig = plot_volubility(recording, speaker)
 
     from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
     from matplotlib.figure import Figure
-    import seaborn
     canvas = FigureCanvas(fig)
     response = HttpResponse(content_type='image/png')
     canvas.print_png(response)
