@@ -1,3 +1,4 @@
 *.sqlite3
 *.pyc
 */migrations/*
+speechvisserver/ivfcrvis/__pycache__/
