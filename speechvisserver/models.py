@@ -77,9 +77,9 @@ class Recording(models.Model):
         for number, start, end, speaker in zip(numbers, starts, ends, speakers):
             print('Inserting Segment {0} of {1}'.format(number, len(numbers)))
             segment_audio = self.signal[int(start * self.samplerate):int(end * self.samplerate)]
-            filename = os.path.join(segments_directory, speaker, '{0}.wav'.format(number))
+            filepath = os.path.join(segments_directory, speaker, '{0}.wav'.format(number))
             wavfile.write(filename, self.samplerate, segment_audio)
-            segment = Segment(recording=self, number=number, start=start, end=end, filename=filename)
+            segment = Segment(recording=self, number=number, start=start, end=end)
             segments.append(segment)
         Segment.objects.bulk_create(segments)
 
@@ -108,7 +108,7 @@ class Recording(models.Model):
 
     @property
     def lena_segments(self):
-        return self.segments.filter(annotation__coder='LENA').annotate(
+        return self.segment.filter(annotation__coder='LENA').annotate(
             speaker=Max('annotation__speaker'), category=Max('annotation__category'))
 
     def __str__(self):
@@ -151,7 +151,6 @@ class Segment(models.Model):
     number = models.IntegerField()
     start = models.FloatField()
     end = models.FloatField()
-    filename = models.CharField(max_length=400, blank=True)
 
     class Meta:
         unique_together = ('recording', 'number')
@@ -162,12 +161,21 @@ class Segment(models.Model):
 
     @property
     def lena_speaker(self):
-        return self.annotations.get(coder='LENA').speaker
+        return self.annotation.get(coder='LENA').speaker
 
     @property
     def lena_category(self):
-        return self.annotations.get(coder='LENA').category
+        return self.annotation.get(coder='LENA').category
 
+    @property
+    def full_path(self):
+        return os.path.join(self.recording.directory, self.static_path)
+    
+    @property
+    def static_path(self):
+        return os.path.join(self.recording.id, self.lena_speaker,
+                            '{}.wav'.format(self.number))
+    
     def read_audio(self):
         self.samplerate, self.signal = wavfile.read(self.filename)
 

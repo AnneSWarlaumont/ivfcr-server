@@ -35,7 +35,7 @@ def speaker_validation(request):
         'coder': coder,
         'recording_id': annotation.segment.recording.id,
         'segment_number': annotation.segment.number,
-        'segment_file': segment.filename,
+        'filename': segment.static_path,
         'speaker': annotation.speaker,
         'speaker_descriptive': getDescriptiveName(annotation.speaker),
         'annotation_id': annotation.id,
@@ -62,7 +62,31 @@ def vocal_categorization(request):
     context = {
         'coder': coder,
         'segment': segment,
-        'filename': segment.filename,
+        'filename': segment.static_path,
+        'error': error
+    }
+    return render(request, 'vocal_categorization.html', context)
+
+
+def speaker_identification(request):
+    coder = request.GET.get('coder', '')
+    submit = request.GET.get('submit', '')
+    error = ''
+    if submit:
+        if not coder:
+            error = 'Your name is required in the coder field.'
+        else:
+            segment_id = request.GET.get('segment_id')
+            segment = Segment.objects.get(id=segment_id)
+            annotation = Annotation(segment=segment, coder=coder, method='SPEAKER_IDENTIFICATION')
+            annotation.speaker = request.GET.get('speaker')
+            annotation.save()
+    records = Segment.objects.filter(annotation__speaker__in=['CHN', 'CXN', 'FAN', 'MAN', 'OLN'])
+    records = records.exclude(annotation__method='SPEAKER_IDENTIFICATION')
+    segment = records[random.randrange(records.count())]
+    context = {
+        'coder': coder,
+        'segment': segment,
         'error': error
     }
     return render(request, 'vocal_categorization.html', context)
@@ -195,7 +219,6 @@ def plot(request):
         fig = plot_intervals(recording, speaker)
     elif type == types[3]:
         fig = plot_volubility(recording, speaker)
-
     from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
     from matplotlib.figure import Figure
     canvas = FigureCanvas(fig)
