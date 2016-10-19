@@ -47,7 +47,7 @@ def plot_intervals(recording, speaker):
     midpoints = values[:-1, 0] + (values[1:, 1] - values[:-1, 0]) / 2
     fig = pyplot.figure()
     pyplot.subplot(2, 1, 1)
-    pyplot.plot(midpoints, intervals, '.')
+    pyplot.plot(midpoints, intervals)
     pyplot.title('Vocalization Intervals for {0}'.format(speaker))
     pyplot.xlabel('Time (s)')
     pyplot.ylabel('Interval (s)')
