@@ -94,13 +94,12 @@ class Recording(models.Model):
         Annotation.objects.bulk_create(annotations)
 
     def frequency_banks(self, blockSize=600):
-        samplerate, signal = self.read_recording()
         fbanks = numpy.zeros((0, 1, 26))
         start = 0
-        while start < len(signal):
-            end = start + blockSize * samplerate
-            end = end if end < len(signal) else len(signal)
-            block = signal[start:end]
+        while start < len(self.signal):
+            end = start + blockSize * self.samplerate
+            end = end if end < len(self.signal) else len(self.signal)
+            block = self.signal[start:end]
             fbank = logfbank(block, self.samplerate, winlen=0.05, winstep=0.025)
             fbanks = numpy.concatenate((fbanks, numpy.reshape(fbank, (len(fbank), 1, 26))))
             start = end
