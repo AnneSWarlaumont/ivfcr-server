@@ -177,7 +177,7 @@ class Segment(models.Model):
                             '{}.wav'.format(self.number))
     
     def read_audio(self):
-        self.samplerate, self.signal = wavfile.read(self.filename)
+        self.samplerate, self.signal = wavfile.read(self.full_path)
 
     def acoustic_features(self):
         window_size = 1024
