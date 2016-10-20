@@ -19,7 +19,7 @@ class Child(models.Model):
 
 class Recording(models.Model):
     @staticmethod
-    def import_recording(id, directory):
+    def import_recording(id, directory, writeFiles=True):
         """Create a new recording in the database, parse the associated ITS files, create
             rows for each segment, and split the original wave file into segments in subdirectories"""
         recording = Recording(id=id, directory=directory)
@@ -27,7 +27,7 @@ class Recording(models.Model):
         recording.save()
         recording.read_audio()
         numbers, starts, ends, speakers, categories = recording.split_its()
-        recording.create_segments(numbers, starts, ends, speakers)
+        recording.create_segments(numbers, starts, ends, speakers, writeFiles)
         recording.create_annotations(numbers, speakers, categories, 'LENA', 'SPLIT_ITS')
 
     child = models.ForeignKey(Child, on_delete=models.CASCADE, null=False)
@@ -65,20 +65,22 @@ class Recording(models.Model):
         filename = '{0}/{1}.wav'.format(self.directory, self.id)
         self.samplerate, self.signal = wavfile.read(filename)
 
-    def create_segments(self, numbers, starts, ends, speakers):
-        segments_directory = os.path.join(self.directory, self.id)
-        if not os.path.exists(segments_directory):
-            os.makedirs(segments_directory)
-        for speaker in set(speakers):
-            speaker_directory = os.path.join(segments_directory, speaker)
-            if not os.path.exists(speaker_directory):
-                os.makedirs(speaker_directory)
+    def create_segments(self, numbers, starts, ends, speakers, writeFiles):
+        if writeFiles:
+            segments_directory = os.path.join(self.directory, self.id)
+            if not os.path.exists(segments_directory):
+                os.makedirs(segments_directory)
+            for speaker in set(speakers):
+                speaker_directory = os.path.join(segments_directory, speaker)
+                if not os.path.exists(speaker_directory):
+                    os.makedirs(speaker_directory)
         segments = []
         for number, start, end, speaker in zip(numbers, starts, ends, speakers):
             print('Inserting Segment {0} of {1}'.format(number, len(numbers)))
-            segment_audio = self.signal[int(start * self.samplerate):int(end * self.samplerate)]
-            filepath = os.path.join(segments_directory, speaker, '{0}.wav'.format(number))
-            wavfile.write(filename, self.samplerate, segment_audio)
+            if writeFiles:
+                segment_audio = self.signal[int(start * self.samplerate):int(end * self.samplerate)]
+                filepath = os.path.join(segments_directory, speaker, '{0}.wav'.format(number))
+                wavfile.write(filepath, self.samplerate, segment_audio)
             segment = Segment(recording=self, number=number, start=start, end=end)
             segments.append(segment)
         Segment.objects.bulk_create(segments)
@@ -93,14 +95,14 @@ class Recording(models.Model):
             annotations.append(annotation)
         Annotation.objects.bulk_create(annotations)
 
-    def frequency_banks(self, blockSize=600):
+    def frequency_banks(self, winlen=0.05, winstep=0.025, blockSize=600):
         fbanks = numpy.zeros((0, 1, 26))
         start = 0
         while start < len(self.signal):
             end = start + blockSize * self.samplerate
             end = end if end < len(self.signal) else len(self.signal)
             block = self.signal[start:end]
-            fbank = logfbank(block, self.samplerate, winlen=0.05, winstep=0.025)
+            fbank = logfbank(block, self.samplerate, winlen=winlen, winstep=winstep)
             fbanks = numpy.concatenate((fbanks, numpy.reshape(fbank, (len(fbank), 1, 26))))
             start = end
         return fbanks
