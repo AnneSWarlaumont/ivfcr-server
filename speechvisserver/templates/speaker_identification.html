@@ -1,6 +1,16 @@
 <html style="width: 100%">
 	<head>
 		<title>Speaker Identification</title>
+		<style type="text/css">
+.speaker-label {
+	border: 1px blue solid;
+	color: black;
+	background-color: lightblue;
+	padding: 2px;
+	display: inline-block;
+	width: 200px;
+}
+		</style>
 	</head>
 	<body style="width: 100%">
 		{% load static %}
@@ -12,32 +22,31 @@
 - Enter your name in the Coder field below.
 - Listen to the sound by clicking the play button.
 - If you hear only a single speaker and minimal other noise, select the speaker.
-- If you hear multiple speakers, select overlap and indicate the speakers you heard.
-- When you are ready, click the submit button to move onto the next sound.">
+- If you hear multiple speakers, select each speaker you heard.
+- When you are ready, click the submit button to move onto the next sound.
+- Click the Previous or Next button to skip this sound.">
 					Instructions</span></p>
 				<label for="coder_field">Name:</label>
 				<input id="coder_field" name="coder" type="text" value="{{ coder }}" />
 				<audio controls style="padding: 1em 4px;">
 					<source src="{% static segment_file %}" type="audio/wav" />
 				</audio>
-				<input name="recording_id" type="hidden" value="{{ segment.recording.id }}" />
-				<input name="segment_number" type="hidden" value="{{ segment.number }}" />
-				<input name="annotation_id" type="hidden" value="{{ annotation_id }}" />
+				<input name="segment_id" type="hidden" value="{{ segment.id }}" />
+				<label>Recording: </label>
+				<div style="display: inline-block;" >{{ segment.recording.id }}</div>
+				<br />
+				<label>Number: </label>
+				<div style="display: inline-block;" >{{ segment.number }}</div>
 				<br />
 				<label>Whose voices do you hear in this segment?</label>
 				<div style="margin: 4px;">
+					{% for spk in speakers %}
 					<div style="margin: 8px 4px;">
-						<input id="speaker_valid" name="speaker" type="radio" value="{{ speaker }}" checked="true" />
-						<label for="speaker_valid" style="border: 1px green solid; color: green; background-color: lightgreen; padding: 2px;">{{ speaker_descriptive }} Only</label><br />
+						<input id="speaker_{{ spk.0 }}" name="speaker" type="checkbox" value="{{ spk.0 }}" />
+						<label for="speaker_{{ spk.0 }}" class="speaker-label">{{ spk.1 }}</label>
+						<br />
 					</div>
-					<div style="margin: 8px 4px;">
-						<input id="speaker_overlap" name="speaker" type="radio" value="OLN" />
-						<label for="speaker_overlap" style="border: 1px red solid; color: red; background-color: yellow; padding: 2px;">{{ speaker_descriptive }} Overlap</label>
-					</div>
-					<div style="margin: 8px 4px;">
-						<input id="speaker_reject" name="speaker" type="radio" value="REJ" />
-						<label for="speaker_reject" style="border: 1px red solid; color: red; background-color: pink; padding: 2px;">{{ speaker_descriptive }} Not Heard</label>
-					</div>
+					{% endfor %}
 				</div>
 				<label for="sensitive">Does this segment contain
 					<span style="font-style: italic; color: blue;"
@@ -54,7 +63,9 @@
 					sensitive material?</span></label>
 				<input name="sensitive" type="checkbox" value="true" />
 				<br />
-				<input type="submit" name="submit" value="Submit" style="margin: 1em 130px;" />
+				<input type="submit" name="submit" value="Previous" style="display: inline;" />
+				<input type="submit" name="submit" value="Save" style="display: inline;" />
+				<input type="submit" name="submit" value="Skip" style="display: inline;" />
 				<label style="font-color: red;">{{ error }}</label>
 			</form>
 		</div>

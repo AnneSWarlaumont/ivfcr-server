@@ -72,24 +72,56 @@ def speaker_identification(request):
     coder = request.GET.get('coder', '')
     submit = request.GET.get('submit', '')
     error = ''
+    speakers_list = ['CHN', 'CXN', 'FAN', 'MAN']
+    descriptions = ['Primary Child', 'Other Child', 'Female Adult', 'Male Adult']
+    recording = Recording.objects.all()[0]
+    segment = None
     if submit:
-        if not coder:
-            error = 'Your name is required in the coder field.'
+        print(submit.lower())
+        segment_id = request.GET.get('segment_id')
+        segment = Segment.objects.get(id=segment_id)
+        if submit.lower() == 'previous':
+            records = Segment.objects.filter(recording=recording,
+                                             annotation__speaker__in=speakers_list)
+            records = records.filter(number__lt=segment.number).order_by('-number')
+            segment = records[0]
         else:
-            segment_id = request.GET.get('segment_id')
-            segment = Segment.objects.get(id=segment_id)
-            annotation = Annotation(segment=segment, coder=coder, method='SPEAKER_IDENTIFICATION')
-            annotation.speaker = request.GET.get('speaker')
-            annotation.save()
-    records = Segment.objects.filter(annotation__speaker__in=['CHN', 'CXN', 'FAN', 'MAN', 'OLN'])
-    records = records.exclude(annotation__method='SPEAKER_IDENTIFICATION')
-    segment = records[random.randrange(records.count())]
+            if submit.lower() == 'save':
+                if not coder:
+                    error = 'Your name is required in the coder field.'
+                else:
+                    annotation = Annotation(segment=segment, coder=coder, method='SPEAKER_IDENTIFICATION')
+                    speakers = request.GET.getlist('speaker')
+                    if len(speakers) == 0:
+                        annotation.speaker = 'SIL'
+                    elif len(speakers) == 1:
+                        annotation.speaker = speakers[0]
+                    else:
+                        annotation.speaker = ','.join(speakers)
+                    annotation.sensitive = True if request.GET.get('sensitive', False) else False
+                    annotation.save()
+            records = Segment.objects.filter(recording=recording,
+                                             annotation__speaker__in=speakers_list)
+            records = records.filter(number__gt=segment.number).order_by('number')
+            segment = records[0]
+    else:
+        records = Segment.objects.filter(recording=recording,
+                                         annotation__speaker__in=speakers_list)
+        records = records.exclude(annotation__method='SPEAKER_IDENTIFICATION')
+        records = records.order_by('recording__id', 'number')
+        segment = records[0]
+    if error:
+        print('Error: {}'.format(error))
+    speakers_list.append('REJ')
+    descriptions.append('Noise, Television, Unknown')
     context = {
+        'speakers': zip(speakers_list, descriptions),
         'coder': coder,
         'segment': segment,
+        'segment_file': segment.static_path,
         'error': error
     }
-    return render(request, 'vocal_categorization.html', context)
+    return render(request, 'speaker_identification.html', context)
 
 
 def data_manager(request):
