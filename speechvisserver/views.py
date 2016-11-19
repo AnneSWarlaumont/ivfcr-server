@@ -74,7 +74,7 @@ def speaker_identification(request):
     error = ''
     speakers_list = ['CHN', 'CXN', 'FAN', 'MAN']
     descriptions = ['Primary Child', 'Other Child', 'Female Adult', 'Male Adult']
-    recording = Recording.objects.all()[0]
+    recording = Recording.objects.all()[0] # IVFCR340 6 mos
     segment = None
     if submit:
         print(submit.lower())
@@ -114,11 +114,14 @@ def speaker_identification(request):
         print('Error: {}'.format(error))
     speakers_list.append('REJ')
     descriptions.append('Noise, Television, Unknown')
+    all_rows = recording.segment.filter(annotation__coder='LENA', annotation__speaker__in=speakers_list)
+    percent_complete = int(100 * all_rows.filter(annotation__method='SPEAKER_IDENTIFICATION').count() / all_rows.count())
     context = {
         'speakers': zip(speakers_list, descriptions),
         'coder': coder,
         'segment': segment,
         'segment_file': segment.static_path,
+        'percent_complete': percent_complete,
         'error': error
     }
     return render(request, 'speaker_identification.html', context)

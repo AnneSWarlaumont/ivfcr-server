@@ -32,11 +32,15 @@
 					<source src="{% static segment_file %}" type="audio/wav" />
 				</audio>
 				<input name="segment_id" type="hidden" value="{{ segment.id }}" />
+				<label>Child: </label>
+				<div style="display: inline-block;" >{{segment.recording.child.id}}</div>
+				<br />
 				<label>Recording: </label>
 				<div style="display: inline-block;" >{{ segment.recording.id }}</div>
 				<br />
 				<label>Number: </label>
-				<div style="display: inline-block;" >{{ segment.number }}</div>
+				<div style="display: inline-block;" >{{ segment.number }} ({{ percent_complete }}%)</div>
+				<progress value="{{ percent_complete }}" max="100"></progress>
 				<br />
 				<label>Whose voices do you hear in this segment?</label>
 				<div style="margin: 4px;">
