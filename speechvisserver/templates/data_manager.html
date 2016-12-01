@@ -16,7 +16,7 @@ td {
 		<div id="content" style="border: solid 2px darkgray; width: 640px; margin: 0 auto; padding: 8px;">
 			<a href="{% url 'index' %}">Home</a>
 			<h2>IVFCR Data Manager</h2>
-			<form>
+			<form method="get" action="data_manager/export">
 				<table style="border: solid 1px grey;">
 					<tr>
 						<th>Child Id</th>
@@ -29,7 +29,7 @@ td {
 						<td>{{ recording.child_id }}</td>
 						<td>{{ recording.id }}</td>
 						<td>{{ recording.directory }}</td>
-						<td><button name="export" type="submit" value="{{ recording.id }}" />Export</td>
+						<td><button name="submit" type="submit" value="{{ recording.id }}" />Export</td>
 					</tr>
 					{% endfor %}
 				</table>
@@ -59,6 +59,8 @@ td {
 					<input name="export_{{ column }}" id="export_{{ column }}" type="checkbox" />
 					{% endfor %}
 				</div>
+			</form>
+			<form method="get" action="data_manager/import">
 				<div>
 					<h4 style="margin-bottom: 0;">Import Recording</h4>
 					<label>Recording Id</label>
@@ -67,9 +69,26 @@ td {
 					<label>Directory</label>
 					<input name="add_recording_directory" type="text" />
 					<br />
-					<input name="import" type="submit" value="import" />
+					<input name="submit" type="submit" value="import" />
 					<p style="color: red; font-weight: bold;">{{ error }}</p>
 				</div>
+			</form>
+			<form method="get" action="data_manager/save_audio_feature">
+				<h4 style="margin-bottom: 0;">Save Audio Features</h4>
+				<label>Recording Id</label>
+				<select id="feature_recording_id_option">
+					{% for recording in recordings %}
+					<option>{{ recording.id }}</option>
+					{% endfor %}
+				</select>
+				<br />
+				<label>Feature</label>
+				<input name="feature" type="text" />
+				<br />
+				<label>Filename</label>
+				<input name="save_feature_file" type="file" />
+				<br />
+				<input name="submit" type="submit" value="save_feature" />
 			</form>
 		</div>
 	</body>

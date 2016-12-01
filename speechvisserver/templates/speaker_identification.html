@@ -11,6 +11,22 @@
 	width: 200px;
 }
 		</style>
+		<script type="text/javascript">
+		var speakers = [
+		{% for spk in speakers %}
+		'{{ spk.0 }}',
+		{% endfor %}];
+
+		function keyHandler(event) {
+			var speakerCode = event.keyCode - 49;
+			if (speakerCode >= 0 && speakerCode < speakers.length) {
+				var element = document.getElementById('speaker_' + speakers[speakerCode]);
+				element.checked = !element.checked;
+			}
+		}
+
+		document.addEventListener('keypress', keyHandler);
+		</script>
 	</head>
 	<body style="width: 100%">
 		{% load static %}

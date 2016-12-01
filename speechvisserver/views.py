@@ -115,9 +115,9 @@ def speaker_identification(request):
     speakers_list.append('REJ')
     descriptions.append('Noise, Television, Unknown')
     all_rows = recording.segment.filter(annotation__coder='LENA', annotation__speaker__in=speakers_list)
-    percent_complete = int(100 * all_rows.filter(annotation__method='SPEAKER_IDENTIFICATION').count() / all_rows.count())
+    percent_complete = int(100 * all_rows.filter(annotation__coder=coder, annotation__method='SPEAKER_IDENTIFICATION').count() / all_rows.count())
     context = {
-        'speakers': zip(speakers_list, descriptions),
+        'speakers': list(zip(speakers_list, descriptions)),
         'coder': coder,
         'segment': segment,
         'segment_file': segment.static_path,
@@ -130,6 +130,20 @@ def speaker_identification(request):
 def data_manager(request):
     submit = request.GET.get('submit', '')
     error = ''
+    if submit == 'save_feature':
+        id = request.GET.get('feature_recording_id_option')
+        feature = request.GET.get('feature').strip()
+        filename = request.GET.get('save_feature_file')
+        print('test')
+        if not id:
+            error = 'Invalid Recording Id'
+        elif not feature:
+            error = 'Invalid Feature'
+        else:
+            recording = Recording.objects.get(id=id)
+            data = numpy.loadtxt(filename)
+            feature = AudioFeature.save_feature(recording, feature, data)
+            print(feature)
     if submit == 'import':
         id = request.GET.get('add_recording_id', '').strip()
         directory = request.GET.get('add_recording_directory', '')

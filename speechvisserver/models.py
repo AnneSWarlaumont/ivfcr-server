@@ -307,3 +307,27 @@ class Annotation(models.Model):
         return '{0}: {1}\t{2}\t{3}\t{4}\t{5}\t({6}, {7}, {8})'.format(self.id, self.segment.id,
             self.speaker, self.category, self.transcription, self.sensitive,
             self.coder, self.method, self.annotated)
+
+
+class AudioFeature(models.Model):
+    @staticmethod
+    def save_feature(recording, feature, data):
+        feature = AudioFeature(recording=recording, feature=feature)
+        feature.save()
+        numpy.savez(feature.filename, data=data)
+        return feature
+
+    recording = models.ForeignKey(Recording, on_delete=models.CASCADE, related_name='feature')
+    feature = models.CharField(max_length=50, null=False)
+    generated = models.DateTimeField(auto_now=True, auto_created=True)
+
+    @property
+    def filename(self):
+        return os.path.join(self.recording.directory, '{}_{}.npz'.format(self.recording.id, self.feature))
+
+    @property
+    def data(self):
+        return numpy.load(self.filename)['data']
+
+    def __str__(self):
+        return '{0} Feature: {1} {2}'.format(self.recording.id, self.feature, self.generated)
