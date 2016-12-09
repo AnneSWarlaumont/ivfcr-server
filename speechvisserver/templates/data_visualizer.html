@@ -1,37 +1,172 @@
 <html style="width: 100%">
-	<head>
-		<script type="text/javascript">
-function getPlot() {
-	var plot_container = document.getElementById("plot_container");
-	var plot_type = document.getElementById("plot_type_option").value;
-	var recording_id = document.getElementById("recording_id_option").value;
-	var speaker = document.getElementById("speaker_option").value;
-	plot_container.src = "plot?plot_type=" + plot_type + "&recording_id=" + recording_id + "&speaker=" + speaker;
-}
-		</script>
-	</head>
-	<body style="width: 100%">
-		{% load static %}
-		<div id="content" style="border: solid 2px darkgray; width: 640px; margin: 0 auto; padding: 8px;">
-			<a href="{% url 'index' %}">Home</a>
-			<h2>IVFCR Data Visualizer</h2>
-			<select id="plot_type_option">
-				{% for type in plot_types %}
-				<option>{{ type }}</option>
-				{% endfor %}
-			</select>
-			<select id="recording_id_option">
-				{% for row in ids %}
-				<option>{{ row.id }}</option>
-				{% endfor %}
-			</select>
-			<select id="speaker_option">
-				{% for speaker in speakers %}
-				<option>{{ speaker }}</option>
-				{% endfor %}
-			</select>
-			<button onclick="getPlot()">REFRESH</button>
-			<img id="plot_container" src="plot" />
-		</div>
-	</body>
+    <head>
+        {% load static %}
+        <script src="{% static 'js/Chart.min.js' %}"></script>
+        <script src="{% static 'js/jquery-3.1.1.min.js' %}"></script>
+        <script type="text/javascript">
+        var featureStartIndex = 0;
+        var featureEndIndex = 0;
+        var featureT = [];
+        var featureX = [];
+        var featureY = [];
+
+        var data = {
+            datasets: [{
+                label: "Data",
+                fill: false,
+                pointBackgroundColor: "#444",
+                lineTension: 0.0,
+                data: []
+            }]
+        };
+
+        var chart;
+
+        var recording_files = {
+            None: '',
+            {% for recording in recordings %}
+            {{ recording.id }}: '{% static recording.filename %}',
+            {% endfor %}
+        };
+
+        var recording_features = {
+            None: [],
+            {% for recording in recordings %}
+            {{ recording.id }}: [
+                {% for feature in recording.feature.all %}
+                '{{ feature.feature }}',
+                {% endfor %}
+            ],
+            {% endfor %}
+        };
+
+        function updateDataset() {
+            var id = $("#recording_id_option").val();
+            $("#recording_audio").attr("src", recording_files[id]);
+            var features = recording_features[id];
+            $("#feature_option").empty();
+            for (var i = 0; i < features.length; ++i) {
+                $("#feature_option").append($("<option>", {
+                    value: features[i],
+                    text: features[i]
+                }));
+            }
+        }
+
+        function updatePosition() {
+            var time = $("#recording_audio")[0].currentTime;
+            if (featureT.length == 0 || featureT[0] > time || featureT[featureT.length - 100] < time) {
+                getFeature();
+            } else {
+                updateChart();
+            }
+        }
+
+        function updateChart() {
+            var time = $("#recording_audio")[0].currentTime;
+            for (featureStartIndex = 0; featureStartIndex < featureT.length && featureT[featureStartIndex] < time; ++featureStartIndex) {}
+            featureEndIndex = featureStartIndex + 100;
+            chart.data.datasets[0].data = [];
+            for (var i = featureStartIndex; i < featureEndIndex; ++i) {
+                chart.data.datasets[0].data.push({
+                    x: featureX[i],
+                    y: featureY[i]
+                });
+            }
+            chart.update();
+        }
+
+        function getFeature() {
+            $.ajax({
+                type: "GET",
+                url: "visualize_feature",
+                dataType: "json",
+                data: {
+                    recording_id: $("#recording_id_option").val(),
+                    feature: $("#feature_option").val(),
+                    start: $("#recording_audio")[0].currentTime,
+                    limit: 10 * $("#limit").val(),
+                    method: $("#method_option").val()
+                },
+                success: function(data) {
+                    featureT = data.t;
+                    featureX = data.x;
+                    featureY = data.y;
+                    updateChart();
+                }
+            });
+        }
+
+        function displayPoint(elements) {
+            if (featureX.length > 0) {
+                $("#point_label").text("");
+                var i = featureStartIndex;
+                if (elements.length > 0) {
+                    i += elements[0]._index;
+                }
+                var t = featureT[i]
+                var x = featureX[i];
+                var y = featureY[i];
+                $("#point_label").text(t.toFixed(2) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
+            }
+        }
+
+        $().ready(function() {
+            var ctx = $("#myChart");
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: data,
+                options: {
+                    title: {
+                        display: true,
+                        text: "Data Visualizer"
+                    },
+                    legend: {
+                        display: false
+                    },
+                    scales: {
+                        xAxes: [{
+                            type: 'linear',
+                            position: 'bottom'
+                        }]
+                    },
+                    tooltips: {
+                        enabled: false
+                    },
+                    hover: {
+                        onHover: displayPoint
+                    },
+                    animation: false
+                }
+            });
+            $("#recording_audio").bind("timeupdate", updatePosition);
+        });
+        </script>
+    </head>
+    <body style="width: 100%">
+        <div id="content" style="margin: 0 auto; width: 640px;">
+            <label>Recording Id</label>
+            <select id="recording_id_option" onchange="updateDataset()">
+                <option value="None">Select Recording</option>
+                {% for recording in recordings %}
+                <option value="{{ recording.id }}">{{ recording.id }}</option>
+                {% endfor %}
+            </select>
+            <label>Feature</label>
+            <select id="feature_option">
+            </select>
+            <label>Method</label>
+            <select id="method_option">
+                <option value="None">None</option>
+                <option value="PCA">PCA</option>
+                <option value="PCA DS">PCA Downsample</option>
+            </select>
+            <label>Limit</label>
+            <input type="text" id="limit" maxlength="5" size="5" value="100" />
+            <br />
+            <canvas id="myChart" width="600" height="400"></canvas>
+            <audio controls id="recording_audio" src="" preload="auto"></audio>
+            <div id="point_label"></div>
+        </div>
+    </body>
 </html>

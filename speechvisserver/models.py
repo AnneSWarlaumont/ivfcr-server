@@ -61,9 +61,12 @@ class Recording(models.Model):
             categories.append(parse_category(segment))
         return range(len(starts)), starts, ends, speakers, categories
 
+    @property
+    def filename(self):
+        return '{0}/{1}.wav'.format(self.directory, self.id)
+
     def read_audio(self):
-        filename = '{0}/{1}.wav'.format(self.directory, self.id)
-        self.samplerate, self.signal = wavfile.read(filename)
+        self.samplerate, self.signal = wavfile.read(self.filename)
 
     def create_segments(self, numbers, starts, ends, speakers, writeFiles):
         if writeFiles:
@@ -96,16 +99,18 @@ class Recording(models.Model):
         Annotation.objects.bulk_create(annotations)
 
     def frequency_banks(self, winlen=0.05, winstep=0.025, blockSize=600):
-        fbanks = numpy.zeros((0, 1, 26))
+        t = numpy.zeros(0)
+        fbanks = numpy.zeros((0, 26))
         start = 0
         while start < len(self.signal):
             end = start + blockSize * self.samplerate
             end = end if end < len(self.signal) else len(self.signal)
             block = self.signal[start:end]
             fbank = logfbank(block, self.samplerate, winlen=winlen, winstep=winstep)
-            fbanks = numpy.concatenate((fbanks, numpy.reshape(fbank, (len(fbank), 1, 26))))
+            t = numpy.concatenate((t, numpy.linspace(start / self.samplerate, end / self.samplerate - winstep, len(fbank))))
+            fbanks = numpy.concatenate((fbanks, fbank))
             start = end
-        return fbanks
+        return t, fbanks
 
     @property
     def lena_segments(self):
@@ -311,10 +316,12 @@ class Annotation(models.Model):
 
 class AudioFeature(models.Model):
     @staticmethod
-    def save_feature(recording, feature, data):
+    def save_feature(recording, feature, t, data):
         feature = AudioFeature(recording=recording, feature=feature)
         feature.save()
-        numpy.savez(feature.filename, data=data)
+        numpy.savez(feature.filename, t=t, data=data)
+        feature.t = t
+        feature.data = data
         return feature
 
     recording = models.ForeignKey(Recording, on_delete=models.CASCADE, related_name='feature')
@@ -325,9 +332,10 @@ class AudioFeature(models.Model):
     def filename(self):
         return os.path.join(self.recording.directory, '{}_{}.npz'.format(self.recording.id, self.feature))
 
-    @property
-    def data(self):
-        return numpy.load(self.filename)['data']
+    def load_data(self):
+        file = numpy.load(self.filename)
+        self.t = file['t']
+        self.data = file['data']
 
     def __str__(self):
         return '{0} Feature: {1} {2}'.format(self.recording.id, self.feature, self.generated)

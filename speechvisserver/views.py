@@ -1,6 +1,8 @@
 from django.http import HttpResponse
 from django.shortcuts import render
 from speechvisserver.ivfcrvis.recording import *
+from sklearn.decomposition import PCA
+import json
 import random
 import csv
 import decimal
@@ -243,14 +245,40 @@ def export_mat(arrays):
 
 
 def data_visualizer(request):
-    types = ['speaker_counts', 'durations', 'intervals', 'volubility']
-    speakers = ['CHN', 'FAN', 'MAN', 'CXN']
     context = {
-        'plot_types': types,
-        'speakers': speakers,
-        'ids': Recording.objects.values('id')
+        "recordings": Recording.objects.all()
     }
     return render(request, 'data_visualizer.html', context)
+
+
+def visualize_feature(request):
+    recording_id = request.GET.get('recording_id')
+    feature = request.GET.get('feature')
+    method = request.GET.get('method', 'none').lower()
+    start = float(request.GET.get('start'))
+    limit = int(request.GET.get('limit'))
+    response = {}
+    if recording_id and feature:
+        record = AudioFeature.objects.get(recording__id=recording_id, feature=feature)
+        record.load_data()
+        i = numpy.argmin(numpy.abs(record.t - start))
+        response['t'] = record.t[i:i + limit].tolist()
+        if method == 'none':
+            response['x'] = record.data[i:i + limit,0].tolist()
+            response['y'] = record.data[i:i + limit,1].tolist()
+        elif method == 'pca':
+            pca = PCA(n_components=2)
+            v = pca.fit_transform(record.data)
+            response['x'] = v[i:i + limit,0].tolist()
+            response['y'] = v[i:i + limit,1].tolist()
+        elif method == "pca ds":
+            pca = PCA(n_components=2)
+            v = pca.fit_transform(record.data)
+            response['t'] = record.t[i:i + 10 * limit].reshape((limit, 10)).mean(axis=1).tolist()
+            response['x'] = v[i:i + 10 * limit, 0].reshape((limit, 10)).mean(axis=1).tolist()
+            response['y'] = v[i:i + 10 * limit, 1].reshape((limit, 10)).mean(axis=1).tolist()
+            print(len(response['y']))
+    return HttpResponse(json.dumps(response), content_type='application/json')
 
 
 def plot(request):
