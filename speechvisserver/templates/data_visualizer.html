@@ -4,17 +4,28 @@
         <script src="{% static 'js/Chart.min.js' %}"></script>
         <script src="{% static 'js/jquery-3.1.1.min.js' %}"></script>
         <script type="text/javascript">
+        var featureSampleT = [];
+        var featureSampleX = [];
+        var featureSampleY = [];
         var featureStartIndex = 0;
         var featureEndIndex = 0;
-        var featureT = [];
-        var featureX = [];
-        var featureY = [];
+        var featureRangeT = [];
+        var featureRangeX = [];
+        var featureRangeY = [];
 
         var data = {
             datasets: [{
                 label: "Data",
                 fill: false,
-                pointBackgroundColor: "#444",
+                pointBackgroundColor: "rgba(220,100,100,255)",
+                borderColor: "rgba(160,100,100,255)",
+                lineTension: 0.0,
+                data: []
+            }, {
+                label: "Sample",
+                fill: false,
+                pointBackgroundColor: "#AAA",
+                borderColor: "rgba(0,0,0,0)",
                 lineTension: 0.0,
                 data: []
             }]
@@ -55,8 +66,11 @@
 
         function updatePosition() {
             var time = $("#recording_audio")[0].currentTime;
-            if (featureT.length == 0 || featureT[0] > time || featureT[featureT.length - 100] < time) {
-                getFeature();
+            if (featureRangeT.length == 0 || featureRangeT[0] > time || featureRangeT[featureRangeT.length - 50] < time) {
+                $("#recording_audio")[0].pause();
+                $("#loading").show();
+                getFeatureSample();
+                getFeatureRange();
             } else {
                 updateChart();
             }
@@ -64,19 +78,48 @@
 
         function updateChart() {
             var time = $("#recording_audio")[0].currentTime;
-            for (featureStartIndex = 0; featureStartIndex < featureT.length && featureT[featureStartIndex] < time; ++featureStartIndex) {}
-            featureEndIndex = featureStartIndex + 100;
+            for (featureEndIndex = 0; featureEndIndex < featureRangeT.length && featureRangeT[featureEndIndex] < time; ++featureEndIndex) {}
+            featureStartIndex = featureEndIndex - $("#length").val();
             chart.data.datasets[0].data = [];
             for (var i = featureStartIndex; i < featureEndIndex; ++i) {
                 chart.data.datasets[0].data.push({
-                    x: featureX[i],
-                    y: featureY[i]
+                    x: featureRangeX[i],
+                    y: featureRangeY[i]
                 });
             }
             chart.update();
+            $("#loading").hide();
         }
 
-        function getFeature() {
+        function getFeatureSample() {
+            $.ajax({
+                type: "GET",
+                url: "visualize_feature",
+                dataType: "json",
+                data: {
+                    recording_id: $("#recording_id_option").val(),
+                    feature: $("#feature_option").val(),
+                    sample: true,
+                    limit: $("#sample").val(),
+                    method: $("#method_option").val()
+                },
+                success: function(data) {
+                    featureSampleT = data.t;
+                    featureSampleX = data.x;
+                    featureSampleY = data.y;
+                    chart.data.datasets[1].data = [];
+                    for (var i = 0; i < data.t.length; ++i) {
+                        chart.data.datasets[1].data.push({
+                            x: data.x[i],
+                            y: data.y[i]
+                        });
+                    }
+                    chart.update();
+                }
+            });
+        }
+
+        function getFeatureRange() {
             $.ajax({
                 type: "GET",
                 url: "visualize_feature",
@@ -85,29 +128,36 @@
                     recording_id: $("#recording_id_option").val(),
                     feature: $("#feature_option").val(),
                     start: $("#recording_audio")[0].currentTime,
-                    limit: 10 * $("#limit").val(),
+                    limit: $("#buffer").val(),
                     method: $("#method_option").val()
                 },
                 success: function(data) {
-                    featureT = data.t;
-                    featureX = data.x;
-                    featureY = data.y;
+                    featureRangeT = data.t;
+                    featureRangeX = data.x;
+                    featureRangeY = data.y;
                     updateChart();
                 }
             });
         }
 
         function displayPoint(elements) {
-            if (featureX.length > 0) {
+            if (elements.length > 0 && featureSampleX.length > 0 && elements[0]._datasetIndex == 1) {
+                $("#point_label").text("");
+                var i = elements[0]._index;
+                var t = featureSampleT[i];
+                var x = featureSampleX[i];
+                var y = featureSampleY[i];
+                $("#point_label").text(t.toFixed(0) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
+            } else if (featureRangeX.length > 0) {
                 $("#point_label").text("");
                 var i = featureStartIndex;
                 if (elements.length > 0) {
                     i += elements[0]._index;
                 }
-                var t = featureT[i]
-                var x = featureX[i];
-                var y = featureY[i];
-                $("#point_label").text(t.toFixed(2) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
+                var t = featureRangeT[i]
+                var x = featureRangeX[i];
+                var y = featureRangeY[i];
+                $("#point_label").text(t.toFixed(0) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
             }
         }
 
@@ -161,12 +211,18 @@
                 <option value="PCA">PCA</option>
                 <option value="PCA DS">PCA Downsample</option>
             </select>
-            <label>Limit</label>
-            <input type="text" id="limit" maxlength="5" size="5" value="100" />
             <br />
-            <canvas id="myChart" width="600" height="400"></canvas>
+            <label>Length</label>
+            <input type="text" id="length" maxlength="5" size="5" value="40" />
+            <label>Sample</label>
+            <input type="text" id="sample" maxlength="5" size="5" value="300" />
+            <label>Buffer</label>
+            <input type="text" id="buffer" maxlength="5" size="5" value="1000" />
+            <br />
+            <canvas id="myChart" width="640" height="480"></canvas>
             <audio controls id="recording_audio" src="" preload="auto"></audio>
             <div id="point_label"></div>
+            <div id="loading" style="display: none; position: fixed; top: 400px; left: 300px; background-color: white; border: solid 1px grey;">Loading...</div>
         </div>
     </body>
 </html>
