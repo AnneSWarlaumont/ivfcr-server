@@ -69,6 +69,10 @@ class Recording(models.Model):
     def filepath(self):
         return os.path.join(self.directory, self.filename)
 
+    @property
+    def mp3_filename(self):
+        return '{0}/{1}.mp3'.format(self.directory, self.id)
+
     def read_audio(self):
         self.samplerate, self.signal = wavfile.read(self.filename)
 
@@ -298,8 +302,7 @@ class Segment(models.Model):
                     winstep=0.05, numcep=40, nfilt=80)
 
     def __str__(self):
-        return '{0}: {1}\t{2}s - {3}s\t{4}'.format(self.id, self.recording.id,
-            self.start, self.end, self.filename)
+        return '{0}: {1}\t{2}s - {3}s'.format(self.id, self.recording.id, self.start, self.end)
 
 
 class Annotation(models.Model):
@@ -340,6 +343,21 @@ class AudioFeature(models.Model):
         file = numpy.load(self.filename)
         self.t = file['t']
         self.data = file['data']
+
+    def filter_data(self, speaker):
+        speaker_segments = self.recording.segment.filter(annotation__coder='LENA', annotation__speaker=speaker)
+        newT = []
+        newData = []
+        i = 0
+        for segment in speaker_segments:
+            while self.t[i] < segment.start:
+                i += 1
+            while self.t[i] <= segment.end:
+                newT.append(self.t[i])
+                newData.append(self.data[i,:])
+                i += 1
+            print('Filtered Segment {}'.format(segment.number))
+        return numpy.array(newT), numpy.array(newData)
 
     def __str__(self):
         return '{0} Feature: {1} {2}'.format(self.recording.id, self.feature, self.generated)

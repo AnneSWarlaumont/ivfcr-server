@@ -281,7 +281,7 @@ def visualize_feature(request):
                 response['x'] = v[index, 0].tolist()
                 response['y'] = v[index, 1].tolist()
         else:
-            i = numpy.argmin(numpy.abs(record.t - start)) - 100
+            i = max(numpy.argmin(numpy.abs(record.t - start)) - 100, 0)
             response['t'] = record.t[i:i + limit].tolist()
             if method == 'none':
                 response['x'] = record.data[i:i + limit,0].tolist()

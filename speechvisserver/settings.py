@@ -103,5 +103,5 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
-    'J:/ivfcr/',
+    'D:/ivfcr/', os.path.join(BASE_DIR, 'static')
 )
