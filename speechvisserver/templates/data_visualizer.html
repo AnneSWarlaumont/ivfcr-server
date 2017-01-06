@@ -12,6 +12,7 @@
         var featureRangeT = [];
         var featureRangeX = [];
         var featureRangeY = [];
+        var chartIsReady = false;
 
         var data = {
             datasets: [{
@@ -36,7 +37,7 @@
         var recording_files = {
             None: '',
             {% for recording in recordings %}
-            {{ recording.id }}: '{% static recording.filename %}',
+            {{ recording.id }}: '{% static recording.mp3_filename %}',
             {% endfor %}
         };
 
@@ -51,7 +52,7 @@
             {% endfor %}
         };
 
-        function updateDataset() {
+        function updateRecording() {
             var id = $("#recording_id_option").val();
             $("#recording_audio").attr("src", recording_files[id]);
             var features = recording_features[id];
@@ -64,22 +65,39 @@
             }
         }
 
+        function updateFeature() {
+            var id = $("#recording_id_option").val();
+            getFeatureSample();
+            updatePosition();
+        }
+
         function updatePosition() {
             var time = $("#recording_audio")[0].currentTime;
-            if (featureRangeT.length == 0 || featureRangeT[0] > time || featureRangeT[featureRangeT.length - 50] < time) {
+            var rangeLength = $("#length").val();
+            if (featureRangeT.length == 0 || featureRangeT[featureRangeT.length - 1] < time ||
+                (featureRangeT[rangeLength] > time && time > featureRangeT[featureRangeT.length - 1] - featureRangeT[0])) {
+                chartIsReady = false;
                 $("#recording_audio")[0].pause();
                 $("#loading").show();
-                getFeatureSample();
                 getFeatureRange();
             } else {
-                updateChart();
+                var nextIndex = 0;
+                for (; nextIndex < featureRangeT.length && featureRangeT[nextIndex] < time; ++nextIndex) {}
+                var nextTime = featureRangeT[nextIndex];
+                if (nextTime - time > 1.0) {
+                    $("#recording_audio")[0].pause();
+                    $("#recording_audio")[0].currentTime = nextTime - 0.5;
+                    $("#recording_audio")[0].play();
+                }
             }
         }
 
         function updateChart() {
+            if (!chartIsReady)
+                return;
             var time = $("#recording_audio")[0].currentTime;
             for (featureEndIndex = 0; featureEndIndex < featureRangeT.length && featureRangeT[featureEndIndex] < time; ++featureEndIndex) {}
-            featureStartIndex = featureEndIndex - $("#length").val();
+            featureStartIndex = Math.max(featureEndIndex - $("#length").val(), 0);
             chart.data.datasets[0].data = [];
             for (var i = featureStartIndex; i < featureEndIndex; ++i) {
                 chart.data.datasets[0].data.push({
@@ -135,29 +153,37 @@
                     featureRangeT = data.t;
                     featureRangeX = data.x;
                     featureRangeY = data.y;
-                    updateChart();
+                    chartIsReady = true;
                 }
             });
         }
 
         function displayPoint(elements) {
-            if (elements.length > 0 && featureSampleX.length > 0 && elements[0]._datasetIndex == 1) {
-                $("#point_label").text("");
-                var i = elements[0]._index;
-                var t = featureSampleT[i];
-                var x = featureSampleX[i];
-                var y = featureSampleY[i];
-                $("#point_label").text(t.toFixed(0) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
-            } else if (featureRangeX.length > 0) {
-                $("#point_label").text("");
-                var i = featureStartIndex;
-                if (elements.length > 0) {
-                    i += elements[0]._index;
+            $("#point_label").text("");
+            if (featureSampleX.length == 0)
+                return;
+            for (var i = 0; i < elements.length; ++i) {
+                if (elements[i]._datasetIndex == 1) {
+                    var j = elements[i]._index;
+                    var t = featureSampleT[j];
+                    var x = featureSampleX[j];
+                    var y = featureSampleY[j];
+                    $("#point_label").text("Jump To: " + t.toFixed(0) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
                 }
-                var t = featureRangeT[i]
-                var x = featureRangeX[i];
-                var y = featureRangeY[i];
-                $("#point_label").text(t.toFixed(0) + "s (" + x.toFixed(2) + ", " + y.toFixed(2) + ")");
+            }
+        }
+
+        function selectPoint(elements) {
+            if (featureSampleX.length == 0)
+                return;
+            for (var i = 0; i < elements.length; ++i) {
+                if (elements[i]._datasetIndex == 1) {
+                    var j = elements[i]._index;
+                    var t = featureSampleT[j];
+                    $("#recording_audio")[0].pause();
+                    $("#recording_audio")[0].currentTime = t;
+                    updatePosition();
+                }
             }
         }
 
@@ -184,29 +210,34 @@
                         enabled: false
                     },
                     hover: {
-                        onHover: displayPoint
+                        onHover: displayPoint,
+                        mode: 'point'
                     },
                     animation: false
                 }
             });
+            $("#myChart")[0].onclick = function(evt) {
+                selectPoint(chart.getElementsAtEvent(evt));
+            };
             $("#recording_audio").bind("timeupdate", updatePosition);
+            setInterval(updateChart, 33);
         });
         </script>
     </head>
     <body style="width: 100%">
         <div id="content" style="margin: 0 auto; width: 640px;">
             <label>Recording Id</label>
-            <select id="recording_id_option" onchange="updateDataset()">
+            <select id="recording_id_option" onchange="updateRecording()">
                 <option value="None">Select Recording</option>
                 {% for recording in recordings %}
                 <option value="{{ recording.id }}">{{ recording.id }}</option>
                 {% endfor %}
             </select>
             <label>Feature</label>
-            <select id="feature_option">
+            <select id="feature_option" onchange="updateFeature()">
             </select>
             <label>Method</label>
-            <select id="method_option">
+            <select id="method_option" onchange="updateFeature()">
                 <option value="None">None</option>
                 <option value="PCA">PCA</option>
                 <option value="PCA DS">PCA Downsample</option>
@@ -222,7 +253,7 @@
             <canvas id="myChart" width="640" height="480"></canvas>
             <audio controls id="recording_audio" src="" preload="auto"></audio>
             <div id="point_label"></div>
-            <div id="loading" style="display: none; position: fixed; top: 400px; left: 300px; background-color: white; border: solid 1px grey;">Loading...</div>
+            <div id="loading" style="display: none; position: fixed; top: 280px; left: 48%; background-color: white; border: solid 4px grey; padding: 4px 12px;">Loading...</div>
         </div>
     </body>
 </html>
