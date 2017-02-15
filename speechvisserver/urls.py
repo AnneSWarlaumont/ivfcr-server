@@ -18,15 +18,16 @@ from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib import admin
 from . import views
+from . import data_visualizer
+from . import speaker_identification
 
 urlpatterns = [
     url(r'^$', views.index, name='index'),
     url(r'^speaker_validation/', views.speaker_validation, name='speaker_validation'),
-    url(r'^speaker_identification/', views.speaker_identification, name='speaker_identification'),
+    url(r'^speaker_identification/', speaker_identification.speaker_identification, name='speaker_identification'),
     url(r'^vocal_categorization/', views.vocal_categorization, name='vocal_categorization'),
     url(r'^data_manager', views.data_manager, name='data_manager'),
-    url(r'^data_visualizer', views.data_visualizer, name='data_visualizer'),
-    url(r'^plot', views.plot, name='plot'),
-    url(r'^visualize_feature', views.visualize_feature, name='visualize_feature'),
+    url(r'^data_visualizer', data_visualizer.data_visualizer, name='data_visualizer'),
+    url(r'^visualize_feature', data_visualizer.visualize_feature, name='visualize_feature'),
     url(r'^admin/', include(admin.site.urls)),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
