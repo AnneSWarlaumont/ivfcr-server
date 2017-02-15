@@ -1,6 +1,37 @@
 <html style="width: 100%">
     <head>
         {% load static %}
+        <style>
+select {
+    padding: 2px;
+    margin: 4px;
+}
+input {
+    padding: 2px;
+    margin: 4px;
+}
+label {
+    min-width: 100px;
+}
+#sidebar {
+    margin: 0 2em;
+    width: 240px;
+    float: left;
+}
+#content {
+     margin: 0 auto;
+     width: 600px;
+}
+#loading {
+     display: none;
+     position: fixed;
+     top: 280px;
+     left: 48%;
+     background-color: white;
+     border: solid 4px grey;
+     padding: 4px 12px;
+}
+        </style>
         <script src="{% static 'js/Chart.min.js' %}"></script>
         <script src="{% static 'js/jquery-3.1.1.min.js' %}"></script>
         <script type="text/javascript">
@@ -12,6 +43,7 @@
         var featureRangeT = [];
         var featureRangeX = [];
         var featureRangeY = [];
+        var featureRangeLabels = [];
         var chartIsReady = false;
 
         var data = {
@@ -105,6 +137,7 @@
                     y: featureRangeY[i]
                 });
             }
+            $("#speaker_label").text("Speaker " + featureRangeLabels[i]);
             chart.update();
             $("#loading").hide();
         }
@@ -119,7 +152,8 @@
                     feature: $("#feature_option").val(),
                     sample: true,
                     limit: $("#sample").val(),
-                    method: $("#method_option").val()
+                    x_axis: $("#x_axis").val(),
+                    y_axis: $("#y_axis").val()
                 },
                 success: function(data) {
                     featureSampleT = data.t;
@@ -147,12 +181,14 @@
                     feature: $("#feature_option").val(),
                     start: $("#recording_audio")[0].currentTime,
                     limit: $("#buffer").val(),
-                    method: $("#method_option").val()
+                    x_axis: $("#x_axis").val(),
+                    y_axis: $("#y_axis").val()
                 },
                 success: function(data) {
                     featureRangeT = data.t;
                     featureRangeX = data.x;
                     featureRangeY = data.y;
+                    featureRangeLabels = data.labels;
                     chartIsReady = true;
                 }
             });
@@ -225,35 +261,41 @@
         </script>
     </head>
     <body style="width: 100%">
-        <div id="content" style="margin: 0 auto; width: 640px;">
+        <div id="sidebar">
             <label>Recording Id</label>
+            <br />
             <select id="recording_id_option" onchange="updateRecording()">
                 <option value="None">Select Recording</option>
                 {% for recording in recordings %}
                 <option value="{{ recording.id }}">{{ recording.id }}</option>
                 {% endfor %}
             </select>
+            <br />
             <label>Feature</label>
             <select id="feature_option" onchange="updateFeature()">
             </select>
-            <label>Method</label>
-            <select id="method_option" onchange="updateFeature()">
-                <option value="None">None</option>
-                <option value="PCA">PCA</option>
-                <option value="PCA DS">PCA Downsample</option>
-            </select>
+            <br />
+            <label>X Axis</label>
+            <input type="text" id="x_axis" onchange="updateFeature()" size="5" value="0" />
+            <br />
+            <label>Y Axis</label>
+            <input type="text" id="y_axis" onchange="updateFeature()" size="5" value="1" />
             <br />
             <label>Length</label>
-            <input type="text" id="length" maxlength="5" size="5" value="40" />
-            <label>Sample</label>
-            <input type="text" id="sample" maxlength="5" size="5" value="300" />
-            <label>Buffer</label>
-            <input type="text" id="buffer" maxlength="5" size="5" value="1000" />
+            <input type="text" id="length" maxlength="5" size="5" value="10" />
             <br />
-            <canvas id="myChart" width="640" height="480"></canvas>
+            <label>Sample</label>
+            <input type="text" id="sample" maxlength="5" size="5" value="500" />
+            <br />
+            <label>Buffer</label>
+            <input type="text" id="buffer" maxlength="5" size="5" value="10000" />
+        </div>
+        <div id="content">
+            <canvas id="myChart" width="600" height="480"></canvas>
             <audio controls id="recording_audio" src="" preload="auto"></audio>
             <div id="point_label"></div>
-            <div id="loading" style="display: none; position: fixed; top: 280px; left: 48%; background-color: white; border: solid 4px grey; padding: 4px 12px;">Loading...</div>
+            <div id="speaker_label"></div>
+            <div id="loading">Loading...</div>
         </div>
     </body>
 </html>

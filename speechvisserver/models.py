@@ -29,6 +29,7 @@ class Recording(models.Model):
         numbers, starts, ends, speakers, categories = recording.split_its()
         recording.create_segments(numbers, starts, ends, speakers, writeFiles)
         recording.create_annotations(numbers, speakers, categories, 'LENA', 'SPLIT_ITS')
+        return recording
 
     child = models.ForeignKey(Child, on_delete=models.CASCADE, null=False)
     id = models.CharField(max_length=50, primary_key=True)
@@ -323,10 +324,13 @@ class Annotation(models.Model):
 
 class AudioFeature(models.Model):
     @staticmethod
-    def save_feature(recording, feature, t, data):
+    def save_feature(recording, feature, t, data, labels=None):
         feature = AudioFeature(recording=recording, feature=feature)
         feature.save()
-        numpy.savez(feature.filename, t=t, data=data)
+        if labels is not None:
+            numpy.savez(feature.filename, t=t, data=data, labels=labels)
+        else:
+            numpy.savez(feature.filename, t=t, data=data)
         feature.t = t
         feature.data = data
         return feature
@@ -343,6 +347,11 @@ class AudioFeature(models.Model):
         file = numpy.load(self.filename)
         self.t = file['t']
         self.data = file['data']
+        if 'labels' in file:
+            self.hasLabels = True
+            self.labels = file['labels']
+        else:
+            self.hasLabels = False
 
     def filter_data(self, speaker):
         speaker_segments = self.recording.segment.filter(annotation__coder='LENA', annotation__speaker=speaker)
@@ -350,14 +359,29 @@ class AudioFeature(models.Model):
         newData = []
         i = 0
         for segment in speaker_segments:
-            while self.t[i] < segment.start:
+            while i < len(self.t) and self.t[i] < segment.start:
                 i += 1
-            while self.t[i] <= segment.end:
+            while i < len(self.t) and self.t[i] <= segment.end:
                 newT.append(self.t[i])
                 newData.append(self.data[i,:])
                 i += 1
             print('Filtered Segment {}'.format(segment.number))
         return numpy.array(newT), numpy.array(newData)
+
+    def generate_labels(self, speakers):
+        segments = self.recording.segment.filter(annotation__coder='LENA', annotation__speaker__in=speakers)
+        segments = segments.order_by('start')
+        labels = []
+        i = 0
+        for segment in segments:
+            while i < len(self.t) and self.t[i] < segment.start:
+                labels.append('')
+                i += 1
+            while i < len(self.t) and self.t[i] <= segment.end:
+                labels.append(segment.annotation.filter(coder='LENA').get().speaker)
+                i += 1
+        self.labels = labels
+        numpy.savez(self.filename, t=self.t, data=self.data, labels=self.labels)
 
     def __str__(self):
         return '{0} Feature: {1} {2}'.format(self.recording.id, self.feature, self.generated)

@@ -43,50 +43,63 @@
 - Click the Previous or Next button to skip this sound.">
 					Instructions</span></p>
 				<label for="coder_field">Name:</label>
-				<input id="coder_field" name="coder" type="text" value="{{ coder }}" />
-				<audio controls style="padding: 1em 4px;">
-					<source src="{% static segment_file %}" type="audio/wav" />
-				</audio>
-				<input name="segment_id" type="hidden" value="{{ segment.id }}" />
-				<label>Child: </label>
-				<div style="display: inline-block;" >{{segment.recording.child.id}}</div>
-				<br />
-				<label>Recording: </label>
-				<div style="display: inline-block;" >{{ segment.recording.id }}</div>
-				<br />
-				<label>Number: </label>
-				<div style="display: inline-block;" >{{ segment.number }} ({{ percent_complete }}%)</div>
-				<progress value="{{ percent_complete }}" max="100"></progress>
-				<br />
-				<label>Whose voices do you hear in this segment?</label>
-				<div style="margin: 4px;">
-					{% for spk in speakers %}
-					<div style="margin: 8px 4px;">
-						<input id="speaker_{{ spk.0 }}" name="speaker" type="checkbox" value="{{ spk.0 }}" />
-						<label for="speaker_{{ spk.0 }}" class="speaker-label">{{ spk.1 }}</label>
-						<br />
-					</div>
+				<select>
+					{% for coder in coders %}
+					<option>{{ coder }}</option>
 					{% endfor %}
-				</div>
-				<label for="sensitive">Does this segment contain
-					<span style="font-style: italic; color: blue;"
-						title="Some examples of what should be marked are listed below. This is not a complete list, so in questionable cases ask your supervisor for help. Please be conservative: 'When in doubt, hold it out.'
-- Last/family names (first names, including uncommon ones, are okay)
-- Addresses or other contact information
-- Birthdates
-- Social security, credit card, etc.. numbers
-- Serious arguments
-- Sexual activity or sounds of adults pooping
-- Discussion of drug use
-- Complaints about friends, family members, coworkers, etc.
-- Medical information of a sensitive nature">
-					sensitive material?</span></label>
-				<input name="sensitive" type="checkbox" value="true" />
+				</select>
 				<br />
-				<input type="submit" name="submit" value="Previous" style="display: inline;" />
-				<input type="submit" name="submit" value="Save" style="display: inline;" />
-				<input type="submit" name="submit" value="Skip" style="display: inline;" />
-				<label style="font-color: red;">{{ error }}</label>
+				<select>
+					{% for recording in recordings %}
+					<option>{{ recording.id }}</option>
+					{% endfor %}
+				</select>
+				<input type="submit" name="submit" value="Update" style="display: inline;" />
+				<div>
+					<audio controls style="padding: 1em 4px;">
+						<source src="{% static segment_file %}" type="audio/wav" />
+					</audio>
+					<input name="segment_id" type="hidden" value="{{ segment.id }}" />
+					<label>Child: </label>
+					<div style="display: inline-block;" >{{segment.recording.child.id}}</div>
+					<br />
+					<label>Recording: </label>
+					<div style="display: inline-block;" >{{ segment.recording.id }}</div>
+					<br />
+					<label>Number: </label>
+					<div style="display: inline-block;" >{{ segment.number }} ({{ percent_complete }}%)</div>
+					<progress value="{{ percent_complete }}" max="100"></progress>
+					<br />
+					<label>Whose voices do you hear in this segment?</label>
+					<div style="margin: 4px;">
+						{% for spk in speakers %}
+						<div style="margin: 8px 4px;">
+							<input id="speaker_{{ spk.0 }}" name="speaker" type="checkbox" value="{{ spk.0 }}" />
+							<label for="speaker_{{ spk.0 }}" class="speaker-label">{{ spk.1 }}</label>
+							<br />
+						</div>
+						{% endfor %}
+					</div>
+					<label for="sensitive">Does this segment contain
+						<span style="font-style: italic; color: blue;"
+							title="Some examples of what should be marked are listed below. This is not a complete list, so in questionable cases ask your supervisor for help. Please be conservative: 'When in doubt, hold it out.'
+	- Last/family names (first names, including uncommon ones, are okay)
+	- Addresses or other contact information
+	- Birthdates
+	- Social security, credit card, etc.. numbers
+	- Serious arguments
+	- Sexual activity or sounds of adults pooping
+	- Discussion of drug use
+	- Complaints about friends, family members, coworkers, etc.
+	- Medical information of a sensitive nature">
+						sensitive material?</span></label>
+					<input name="sensitive" type="checkbox" value="true" />
+					<br />
+					<input type="submit" name="submit" value="Previous" style="display: inline;" />
+					<input type="submit" name="submit" value="Save" style="display: inline;" />
+					<input type="submit" name="submit" value="Skip" style="display: inline;" />
+					<label style="font-color: red;">{{ error }}</label>
+				</div>
 			</form>
 		</div>
 	</body>
