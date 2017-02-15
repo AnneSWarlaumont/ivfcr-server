@@ -71,7 +71,7 @@ class Recording(models.Model):
 
     @property
     def mp3_filename(self):
-        return '{0}/{1}.mp3'.format(self.directory, self.id)
+        return '{1}.mp3'.format(self.directory, self.id)
 
     def read_audio(self):
         self.samplerate, self.signal = wavfile.read(self.filename)
