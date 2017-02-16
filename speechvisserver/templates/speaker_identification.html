@@ -32,6 +32,7 @@
 		{% load static %}
 		<div id="content" style="border: solid 2px darkgray; width: 320px; margin: 0 auto; padding: 8px;">
 			<form>
+				<a href="{% url 'index' %}">Home</a>
 				<h4>Infant Vocalization Speaker Identification</h4>
 				<p><span style="font-style: italic; color: black;"
 					title="The speaker identification task is intended to generate correct speaker labels for segments of LENA recordings.
@@ -43,19 +44,24 @@
 - Click the Previous or Next button to skip this sound.">
 					Instructions</span></p>
 				<label for="coder_field">Name:</label>
-				<select>
-					{% for coder in coders %}
+				<select id="coder_field" name="coder">
+					{% if coder != '' %}
 					<option>{{ coder }}</option>
+					{% else %} 
+					{% for cdr in coders %}
+					<option {% if cdr == coder %}selected='true'{% endif %} >{{ cdr }}</option>
 					{% endfor %}
+					{% endif %}
 				</select>
 				<br />
-				<select>
-					{% for recording in recordings %}
-					<option>{{ recording.id }}</option>
+				<label for="recording_id_field">Recording:</label>
+				<select id="recording_id_field" name="recording_id">
+					{% for rec in recordings %}
+					<option {% if rec == recording %}selected='true'{% endif %} >{{ rec.id }}</option>
 					{% endfor %}
 				</select>
 				<input type="submit" name="submit" value="Update" style="display: inline;" />
-				<div>
+				<div style="{% if '' == segment_file %} display: none; {% endif %}" >
 					<audio controls style="padding: 1em 4px;">
 						<source src="{% static segment_file %}" type="audio/wav" />
 					</audio>
@@ -74,7 +80,7 @@
 					<div style="margin: 4px;">
 						{% for spk in speakers %}
 						<div style="margin: 8px 4px;">
-							<input id="speaker_{{ spk.0 }}" name="speaker" type="checkbox" value="{{ spk.0 }}" />
+							<input id="speaker_{{ spk.0 }}" name="speaker" type="checkbox" value="{{ spk.0 }}" {% if spk.0 in selected_speakers %}checked='true'{% endif %} />
 							<label for="speaker_{{ spk.0 }}" class="speaker-label">{{ spk.1 }}</label>
 							<br />
 						</div>
@@ -93,7 +99,7 @@
 	- Complaints about friends, family members, coworkers, etc.
 	- Medical information of a sensitive nature">
 						sensitive material?</span></label>
-					<input name="sensitive" type="checkbox" value="true" />
+					<input name="sensitive" type="checkbox" value="true" {% if selected_sensitive %}checked='true'{% endif %} />
 					<br />
 					<input type="submit" name="submit" value="Previous" style="display: inline;" />
 					<input type="submit" name="submit" value="Save" style="display: inline;" />

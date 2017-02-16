@@ -18,7 +18,7 @@ def speaker_identification(request):
     submit = request.GET.get('submit', '')
     # Setup response variable values for the task
     error = ''
-    coders_list = ['Monica', 'Alison']
+    coders_list = ['Tim Shea', 'Monica Mendiola', 'Alison Cao Romero']
     speakers_list = ['CHN', 'CXN', 'FAN', 'MAN']
     descriptions = ['Primary Child', 'Other Child', 'Female Adult', 'Male Adult']
     # Setup a segment to return to the response
@@ -55,9 +55,15 @@ def speaker_identification(request):
         'error': error
     }
     if segment is not None:
-        context['segment'] = None
+        context['recording'] = segment.recording
+        context['segment'] = segment
         context['percent_complete'] = get_percent_complete(segment.recording, speakers_list, coder)
         context['segment_file'] = segment.static_path
+        annotations = segment.annotation.all()
+        annotation = annotations.filter(method='SPEAKER_IDENTIFICATION', coder=coder)
+        if annotation.count() > 0:
+            context['selected_speakers'] = annotation[0].speaker
+            context['selected_sensitive'] = annotation[0].sensitive
     return render(request, 'speaker_identification.html', context)
 
 
@@ -67,6 +73,7 @@ def select_unidentified_segment(recording_id, coder, speakers_list):
     records = Segment.objects.filter(recording=recording, annotation__speaker__in=speakers_list)
     records = records.exclude(annotation__method='SPEAKER_IDENTIFICATION', annotation__coder=coder)
     records = records.order_by('recording__id', 'number')
+    # TODO: This should handle the case where there are no remaining records!
     return records[0]
 
 
@@ -74,19 +81,30 @@ def select_unidentified_segment(recording_id, coder, speakers_list):
 def select_next_segment(segment, speakers_list):
     records = Segment.objects.filter(recording=segment.recording, annotation__speaker__in=speakers_list)
     records = records.filter(number__gt=segment.number).order_by('number')
-    return records[0]
+    if records.count() == 0:
+        return segment
+    else:
+        return records[0]
 
 
 # Select the segment from any of the speakers in speakers list that precedes the specified segment
 def select_previous_segment(segment, speakers_list):
     records = Segment.objects.filter(recording=segment.recording, annotation__speaker__in=speakers_list)
     records = records.filter(number__lt=segment.number).order_by('-number')
-    return records[0]
+    if records.count() == 0:
+        return segment
+    else:
+        return records[0]
 
 
 # Create an annotation record with the specified speakers
 def annotate_segment(segment, coder, speakers, sensitive):
-    annotation = Annotation(segment=segment, coder=coder, method='SPEAKER_IDENTIFICATION')
+    annotations = segment.annotation.all()
+    annotations = annotations.filter(method='SPEAKER_IDENTIFICATION', coder=coder)
+    if annotations.count() > 0:
+        annotation = annotations[0]
+    else:
+        annotation = Annotation(segment=segment, coder=coder, method='SPEAKER_IDENTIFICATION')
     if len(speakers) == 0:
         annotation.speaker = 'SIL'
     elif len(speakers) == 1:
