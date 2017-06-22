@@ -18,7 +18,7 @@ def speaker_identification(request):
     submit = request.GET.get('submit', '')
     # Setup response variable values for the task
     error = ''
-    coders_list = ['Tim Shea', 'Monica Mendiola', 'Alison Cao Romero']
+    coders_list = ['Tim Shea', 'Monica Mendiola', 'Alison Cao Romero', 'Anne Warlaumont', 'Edith Aceves']
     speakers_list = ['CHN', 'CXN', 'FAN', 'MAN']
     descriptions = ['Primary Child', 'Other Child', 'Female Adult', 'Male Adult']
     # Setup a segment to return to the response
